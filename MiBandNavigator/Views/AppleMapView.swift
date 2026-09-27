@@ -13,7 +13,9 @@ struct AppleMapView: UIViewRepresentable {
         mapView.preferredConfiguration = MKStandardMapConfiguration(elevationStyle: .flat)
         mapView.showsCompass = true
         mapView.showsUserLocation = true
-        mapView.showsUserTrackingButton = true
+        if #available(iOS 17.0, *) {
+            mapView.showsUserTrackingButton = true
+        }
         mapView.setRegion(
             MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: 21.0285, longitude: 105.8542),
