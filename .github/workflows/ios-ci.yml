@@ -28,6 +28,15 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Configure Google Maps API key when available
+        shell: bash
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: |
+          if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
+            printf 'GOOGLE_MAPS_API_KEY = %s\n' "${GOOGLE_MAPS_API_KEY}" > Configuration/Secrets.xcconfig
+          fi
+
       - name: Generate Xcode project
         run: bash scripts/ci/bootstrap.sh
 

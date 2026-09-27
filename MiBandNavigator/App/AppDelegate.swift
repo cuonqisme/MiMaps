@@ -1,3 +1,4 @@
+import GoogleMaps
 import UIKit
 import UserNotifications
 
@@ -6,6 +7,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        if let apiKey = AppConfig.googleMapsAPIKey {
+            GMSServices.provideAPIKey(apiKey)
+        }
+
         let category = UNNotificationCategory(
             identifier: LocalNotificationService.navigationCategoryIdentifier,
             actions: [],
@@ -16,4 +21,3 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 }
-

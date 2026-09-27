@@ -1,0 +1,4 @@
+// Safe defaults. Secrets.xcconfig is local/CI-only and is ignored by Git.
+GOOGLE_MAPS_API_KEY =
+#include? "Secrets.xcconfig"
+

@@ -19,12 +19,22 @@ settings:
 configs:
   Debug: debug
   Release: release
+packages:
+  GoogleMaps:
+    url: https://github.com/googlemaps/ios-maps-sdk
+    exactVersion: 11.2.0
 targets:
   MiBandNavigator:
     type: application
     platform: iOS
     sources:
       - path: MiBandNavigator
+    dependencies:
+      - package: GoogleMaps
+        product: GoogleMaps
+    configFiles:
+      Debug: Configuration/Base.xcconfig
+      Release: Configuration/Base.xcconfig
     info:
       path: MiBandNavigator/Resources/Info.plist
       properties:
@@ -36,6 +46,11 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         NSLocationWhenInUseUsageDescription: "Vị trí của bạn được dùng để cung cấp chỉ đường từng chặng khi phiên điều hướng đang hoạt động."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Vị trí của bạn được dùng để tiếp tục chỉ đường khi khóa màn hình hoặc chuyển ứng dụng."
+        NSMotionUsageDescription: "Dữ liệu chuyển động được Google Navigation SDK dùng để cải thiện độ chính xác điều hướng."
+        GOOGLE_MAPS_API_KEY: "$(GOOGLE_MAPS_API_KEY)"
+        LSApplicationQueriesSchemes:
+          - googlechromes
+          - comgooglemaps
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.mibandnavigator

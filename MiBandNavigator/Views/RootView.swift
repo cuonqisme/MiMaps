@@ -6,7 +6,7 @@ struct RootView: View {
     var body: some View {
         TabView {
             NavigationStack {
-                ContentView()
+                MapScreen()
             }
             .tabItem { Label("Điều hướng", systemImage: "map") }
 
@@ -22,4 +22,3 @@ struct RootView: View {
         }
     }
 }
-
