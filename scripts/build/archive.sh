@@ -28,12 +28,12 @@ if [[ "${mode}" == "signed" ]]; then
   : "${APPLE_TEAM_ID:?APPLE_TEAM_ID is required for a signed archive}"
   : "${PROVISIONING_PROFILE_SPECIFIER:?PROVISIONING_PROFILE_SPECIFIER is required for a signed archive}"
   : "${SIGNING_KEYCHAIN_PATH:?SIGNING_KEYCHAIN_PATH is required for a signed archive}"
-  : "${GOOGLE_MAPS_API_KEY:?GOOGLE_MAPS_API_KEY is required for a release archive}"
+  : "${CODE_SIGN_IDENTITY_NAME:?CODE_SIGN_IDENTITY_NAME is required for a signed archive}"
 
   build_settings+=(
     "DEVELOPMENT_TEAM=${APPLE_TEAM_ID}"
     "CODE_SIGN_STYLE=Manual"
-    "CODE_SIGN_IDENTITY=Apple Distribution"
+    "CODE_SIGN_IDENTITY=${CODE_SIGN_IDENTITY_NAME}"
     "PROVISIONING_PROFILE_SPECIFIER=${PROVISIONING_PROFILE_SPECIFIER}"
     "OTHER_CODE_SIGN_FLAGS=--keychain ${SIGNING_KEYCHAIN_PATH}"
   )

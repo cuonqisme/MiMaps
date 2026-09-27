@@ -24,6 +24,12 @@ security import "${certificate_path}" -P "${P12_PASSWORD}" -A -t cert -f pkcs12 
 security set-key-partition-list -S apple-tool:,apple: -k "${KEYCHAIN_PASSWORD}" "${keychain_path}"
 security list-keychains -d user -s "${keychain_path}"
 
+code_sign_identity="$(security find-identity -v -p codesigning "${keychain_path}" | sed -n 's/.*"\(.*\)"/\1/p' | head -n 1)"
+if [[ -z "${code_sign_identity}" ]]; then
+  echo "The imported certificate does not contain a usable code-signing identity." >&2
+  exit 1
+fi
+
 security cms -D -i "${profile_source_path}" > "${profile_plist_path}"
 profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "${profile_plist_path}")"
 profile_name="$(/usr/libexec/PlistBuddy -c 'Print :Name' "${profile_plist_path}")"
@@ -36,4 +42,5 @@ cp "${profile_source_path}" "${profile_path}"
   echo "SIGNING_KEYCHAIN_PATH=${keychain_path}"
   echo "PROVISIONING_PROFILE_PATH=${profile_path}"
   echo "PROVISIONING_PROFILE_SPECIFIER=${profile_name}"
+  echo "CODE_SIGN_IDENTITY_NAME=${code_sign_identity}"
 } >> "${GITHUB_ENV}"

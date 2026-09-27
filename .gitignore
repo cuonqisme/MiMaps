@@ -16,6 +16,8 @@ Configuration/Secrets.xcconfig
 *.mobileprovision
 *.provisionprofile
 AuthKey_*.p8
+/certificate/
+/Certificate.zip
 
 # Swift Package Manager
 .build/
