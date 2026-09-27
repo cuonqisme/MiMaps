@@ -43,20 +43,16 @@ struct BandNotificationFormatter: Sendable {
         }
 
         return switch maneuver {
-        case .straight: "^"
-        case .slightLeft: "^<"
-        case .left: "<"
-        case .sharpLeft: "<<"
-        case .slightRight: "^>"
-        case .right: ">"
-        case .sharpRight: ">>"
-        case .uTurnLeft: "U<"
-        case .uTurnRight: "U>"
-        case .mergeLeft, .forkLeft, .rampLeft: "^<"
-        case .mergeRight, .forkRight, .rampRight: "^>"
-        case .roundabout, .roundaboutExit: "O"
-        case .destination: "*"
-        case .unknown: "^"
+        case .straight: "↑"
+        case .slightLeft: "↖"
+        case .left, .sharpLeft, .uTurnLeft: "←"
+        case .slightRight: "↗"
+        case .right, .sharpRight, .uTurnRight: "→"
+        case .mergeLeft, .forkLeft, .rampLeft: "↖"
+        case .mergeRight, .forkRight, .rampRight: "↗"
+        case .roundabout, .roundaboutExit: "↑"
+        case .destination: "●"
+        case .unknown: "↑"
         }
     }
 
@@ -65,7 +61,18 @@ struct BandNotificationFormatter: Sendable {
         if case let .roundaboutExit(exit) = instruction.maneuver, let exit {
             return roadName.map { "Lối ra \(exit) • \($0)" } ?? "Lối ra \(exit)"
         }
-        return roadName ?? "Tiếp tục theo tuyến đường"
+        let fallbackLabel: String? = switch instruction.maneuver {
+        case .sharpLeft: "Rẽ gấp trái"
+        case .sharpRight: "Rẽ gấp phải"
+        case .uTurnLeft: "Quay đầu trái"
+        case .uTurnRight: "Quay đầu phải"
+        case .roundabout: "Vòng xuyến"
+        default: nil
+        }
+        if let fallbackLabel, let roadName {
+            return "\(fallbackLabel) • \(roadName)"
+        }
+        return fallbackLabel ?? roadName ?? "Tiếp tục theo tuyến đường"
     }
 
     private func normalizedRoadName(_ roadName: String?) -> String? {

@@ -50,7 +50,7 @@ final class DestinationSearchViewModelTests: XCTestCase {
     }
 
     func testSearchErrorIsExposed() async {
-        let service = PlacesSearchServiceFake(error: PlacesSearchError.configurationMissing)
+        let service = PlacesSearchServiceFake(error: PlacesSearchError.searchFailed("Mất kết nối"))
         let viewModel = DestinationSearchViewModel(searchService: service)
         viewModel.query = "Hà Nội"
 
@@ -94,4 +94,3 @@ private final class PlacesSearchServiceFake: PlacesSearching {
 
     func resetSession() {}
 }
-

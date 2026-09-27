@@ -19,7 +19,7 @@ final class DeveloperToolsViewModelTests: XCTestCase {
 
         XCTAssertEqual(scheduler.contents, [
             NavigationNotificationContent(
-                title: "< 1 km",
+                title: "← 1 km",
                 body: "Lê Thánh Tông",
                 categoryIdentifier: "NAVIGATION_MANEUVER",
                 soundEnabled: true

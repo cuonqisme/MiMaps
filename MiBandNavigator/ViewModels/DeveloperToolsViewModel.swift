@@ -18,17 +18,13 @@ enum TestManeuver: String, CaseIterable, Identifiable, Sendable {
 
     var symbol: String {
         switch self {
-        case .straight: "^"
-        case .slightLeft: "^<"
-        case .left: "<"
-        case .sharpLeft: "<<"
-        case .slightRight: "^>"
-        case .right: ">"
-        case .sharpRight: ">>"
-        case .uTurnLeft: "U<"
-        case .uTurnRight: "U>"
-        case .roundabout: "O"
-        case .destination: "*"
+        case .straight: "↑"
+        case .slightLeft: "↖"
+        case .left, .sharpLeft, .uTurnLeft: "←"
+        case .slightRight: "↗"
+        case .right, .sharpRight, .uTurnRight: "→"
+        case .roundabout: "↑"
+        case .destination: "●"
         }
     }
 

@@ -36,7 +36,7 @@ final class LiveNavigationPipelineTests: XCTestCase {
         provider.emit(arrival)
         await waitUntil { scheduler.contents.count == 3 }
 
-        XCTAssertEqual(scheduler.contents.map(\.title), ["> 500 m", "> 200 m", "* Đã đến nơi"])
+        XCTAssertEqual(scheduler.contents.map(\.title), ["→ 500 m", "→ 200 m", "● Đã đến nơi"])
         XCTAssertEqual(coordinator.lastBandNotification?.maneuver, .destination)
         XCTAssertEqual(coordinator.firedThresholds, [])
     }
