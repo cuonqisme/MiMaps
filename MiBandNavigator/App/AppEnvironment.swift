@@ -8,12 +8,14 @@ final class AppEnvironment: ObservableObject {
     let localNotificationService: LocalNotificationService
     let mockNavigationProvider: MockNavigationProvider
     let navigationCoordinator: NavigationCoordinator
+    let placesSearchService: GooglePlacesSearchService
 
     init() {
         let settings = AppSettings()
         let notificationPermissionManager = NotificationPermissionManager()
         let localNotificationService = LocalNotificationService()
         let mockNavigationProvider = MockNavigationProvider()
+        let placesSearchService = GooglePlacesSearchService()
         let bandTransport = NotificationBandTransport(
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },
@@ -24,6 +26,7 @@ final class AppEnvironment: ObservableObject {
         self.notificationPermissionManager = notificationPermissionManager
         self.localNotificationService = localNotificationService
         self.mockNavigationProvider = mockNavigationProvider
+        self.placesSearchService = placesSearchService
         navigationCoordinator = NavigationCoordinator(
             provider: mockNavigationProvider,
             bandTransport: bandTransport

@@ -1,4 +1,5 @@
 import GoogleMaps
+import GooglePlacesSwift
 import UIKit
 import UserNotifications
 
@@ -9,6 +10,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         if let apiKey = AppConfig.googleMapsAPIKey {
             GMSServices.provideAPIKey(apiKey)
+            PlacesClient.provideAPIKey(apiKey)
         }
 
         let category = UNNotificationCategory(

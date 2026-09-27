@@ -1,12 +1,16 @@
 import SwiftUI
 
 struct MapScreen: View {
+    let environment: AppEnvironment
+    @State private var selectedDestination: Destination?
+    @State private var isSearchPresented = false
+
     var body: some View {
         ZStack(alignment: .top) {
             mapContent
                 .ignoresSafeArea(edges: .bottom)
 
-            Button(action: {}) {
+            Button { isSearchPresented = true } label: {
                 HStack {
                     Image(systemName: "magnifyingglass")
                     Text("Tìm điểm đến…")
@@ -18,17 +22,43 @@ struct MapScreen: View {
                 .shadow(radius: 4, y: 2)
             }
             .padding()
-            .accessibilityHint("Tìm địa điểm bằng Google Places sẽ được bật ở mốc tiếp theo")
+            .accessibilityHint("Mở tìm kiếm địa điểm bằng Google Places")
+
+            if let selectedDestination {
+                VStack {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(selectedDestination.displayName)
+                            .font(.headline)
+                        if let address = selectedDestination.formattedAddress {
+                            Text(address)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("XEM TRƯỚC TUYẾN ĐƯỜNG") {}
+                            .buttonStyle(.borderedProminent)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .padding()
+                }
+            }
         }
         .navigationTitle("MiBand Navigator")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isSearchPresented) {
+            DestinationSearchView(searchService: environment.placesSearchService) { destination in
+                selectedDestination = destination
+            }
+        }
     }
 
     @ViewBuilder
     private var mapContent: some View {
         switch AppConfig.googleAPIConfigurationStatus {
         case .configured:
-            GoogleMapView()
+            GoogleMapView(destination: selectedDestination)
         case .missing:
             VStack(spacing: 16) {
                 Image(systemName: "map.fill")

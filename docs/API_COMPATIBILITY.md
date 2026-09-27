@@ -9,7 +9,7 @@ Verified against official vendor documentation on 2026-09-27.
 | GitHub runner | `macos-26` | Explicit runner; Xcode 26.6 is selected with `DEVELOPER_DIR`. |
 | Navigation SDK | 11.2.0 | Current stable release at verification time. Requires Xcode 26 and iOS 16. Version 11 also requires a motion usage description. |
 | Maps SDK | 11.2.0 | Package URL is `https://github.com/googlemaps/ios-maps-sdk`; product is `GoogleMaps`. |
-| Places Swift SDK | 11.2.0 family | Package URL is `https://github.com/googlemaps/ios-places-sdk`; product is `GooglePlacesSwift`. |
+| Places Swift SDK | 11.1.0 | Latest stable package listed at verification time. Package URL is `https://github.com/googlemaps/ios-places-sdk`; product is `GooglePlacesSwift`. |
 
 Google integration uses Swift Package Manager only and will pin exact versions. SDK types are isolated behind provider/service adapters. Simulator unit tests do not require an API key.
 
