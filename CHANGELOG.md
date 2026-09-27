@@ -9,3 +9,4 @@
 - Added notification threshold/cooldown/deduplication pipeline and mock navigation.
 - Added background location lifecycle and contextual permission handling.
 - Added simulator CI, release archive workflow, conditional signed IPA export, and release reporting.
+- Added a guarded TestFlight workflow using App Store Connect API-key authentication and an independently runnable dry-run path.

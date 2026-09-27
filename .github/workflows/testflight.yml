@@ -2,14 +2,119 @@ name: TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      upload:
+        description: Sign, export, and upload the build to TestFlight
+        required: true
+        type: boolean
+        default: false
+      confirmation:
+        description: Type UPLOAD when upload is enabled; leave DRY-RUN otherwise
+        required: true
+        type: string
+        default: DRY-RUN
 
 permissions:
   contents: read
 
 jobs:
-  testflight-placeholder:
+  testflight:
     runs-on: macos-26
+    timeout-minutes: 75
+    environment: testflight
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      BUILD_NUMBER: ${{ github.run_number }}
+      MARKETING_VERSION: 0.1.0
+      ARCHIVE_PATH: artifacts/release/MiBandNavigator.xcarchive
+      EXPORT_PATH: artifacts/release/export
+      EXPORT_METHOD: app-store-connect
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+
     steps:
       - uses: actions/checkout@v4
-      - run: echo "TestFlight upload is enabled after signing credentials are configured."
 
+      - name: Toolchain information
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Validate upload confirmation
+        if: inputs.upload == true
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "${CONFIRMATION}" != "UPLOAD" ]]; then
+            echo "Upload requested without the required UPLOAD confirmation." >&2
+            exit 64
+          fi
+
+      - name: Configure Google Maps API key
+        if: inputs.upload == true
+        run: |
+          : "${GOOGLE_MAPS_API_KEY:?GOOGLE_MAPS_API_KEY secret is required for TestFlight}"
+          printf 'GOOGLE_MAPS_API_KEY = %s\n' "${GOOGLE_MAPS_API_KEY}" > Configuration/Secrets.xcconfig
+
+      - name: Generate Xcode project
+        run: bash scripts/ci/bootstrap.sh
+
+      - name: Run unit tests
+        run: bash scripts/ci/test.sh
+
+      - name: Verify App Store upload tooling
+        if: inputs.upload != true
+        run: bash scripts/testflight/upload.sh preflight
+
+      - name: Install signing assets
+        if: inputs.upload == true
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: bash scripts/signing/install_signing_assets.sh
+
+      - name: Create unsigned dry-run archive
+        if: inputs.upload != true
+        run: bash scripts/build/archive.sh unsigned
+
+      - name: Create signed App Store archive
+        if: inputs.upload == true
+        run: bash scripts/build/archive.sh signed
+
+      - name: Export App Store IPA
+        if: inputs.upload == true
+        run: bash scripts/build/export_ipa.sh
+
+      - name: Upload to TestFlight
+        if: inputs.upload == true
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          CONFIRM_TESTFLIGHT_UPLOAD: ${{ inputs.confirmation }}
+        run: bash scripts/testflight/upload.sh upload
+
+      - name: Generate release report
+        if: always()
+        env:
+          SIGNING_RESULT: ${{ inputs.upload && 'Apple Distribution / App Store profile' || 'Unsigned TestFlight dry run' }}
+        run: bash scripts/build/release_report.sh
+
+      - name: Upload workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiBandNavigator-testflight-${{ github.run_number }}
+          path: |
+            artifacts/release/
+            test-results/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove signing assets
+        if: always() && inputs.upload == true
+        run: bash scripts/signing/cleanup_signing_assets.sh

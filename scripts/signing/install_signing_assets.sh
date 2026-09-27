@@ -14,8 +14,8 @@ profile_source_path="${signing_dir}/profile.mobileprovision"
 profile_plist_path="${signing_dir}/profile.plist"
 keychain_path="${RUNNER_TEMP}/miband-signing.keychain-db"
 
-printf '%s' "${BUILD_CERTIFICATE_BASE64}" | base64 --decode > "${certificate_path}"
-printf '%s' "${PROVISIONING_PROFILE_BASE64}" | base64 --decode > "${profile_source_path}"
+printf '%s' "${BUILD_CERTIFICATE_BASE64}" | base64 -D > "${certificate_path}"
+printf '%s' "${PROVISIONING_PROFILE_BASE64}" | base64 -D > "${profile_source_path}"
 
 security create-keychain -p "${KEYCHAIN_PASSWORD}" "${keychain_path}"
 security set-keychain-settings -lut 21600 "${keychain_path}"

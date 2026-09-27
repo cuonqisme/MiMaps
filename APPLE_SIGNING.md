@@ -28,6 +28,8 @@ Configure these in repository **Settings → Secrets and variables → Actions**
 | `KEYCHAIN_PASSWORD` | Random CI-only password for the temporary keychain |
 | `GOOGLE_MAPS_API_KEY` | iOS-restricted Google Maps Platform key |
 
+TestFlight additionally requires `ASC_KEY_ID`, `ASC_ISSUER_ID`, and `ASC_PRIVATE_KEY_BASE64`; see `TESTFLIGHT.md`. The App Store Connect API key is separate from the signing certificate and provisioning profile.
+
 On PowerShell, create base64 values without line wrapping:
 
 ```powershell

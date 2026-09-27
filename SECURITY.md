@@ -5,6 +5,7 @@
 - Store release credentials only in GitHub Actions encrypted secrets.
 - Rotate a credential immediately if it appears in a commit, log, issue, or artifact.
 - Release CI uses a temporary keychain and deletes imported signing assets even after failure.
+- TestFlight authentication uses an App Store Connect API key, never an Apple ID password; the temporary `.p8` file is removed on script exit.
 - Artifacts may contain signed application binaries; limit repository and Actions access appropriately.
 - The app has no custom backend, account system, analytics SDK, or stored navigation history.
 

@@ -22,7 +22,7 @@ Open the repository's **Actions** tab and inspect **iOS CI**. The workflow gener
 
 Never commit API keys or Apple signing material. Google Maps Platform setup, key restrictions, signed IPA, and TestFlight steps are documented as their implementation milestones land.
 
-Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Google Cloud](GOOGLE_CLOUD_SETUP.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [testing](TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
+Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Google Cloud](GOOGLE_CLOUD_SETUP.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [TestFlight](TESTFLIGHT.md), [testing](TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
 
 ## Supported toolchain
 

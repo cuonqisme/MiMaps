@@ -42,6 +42,11 @@ if [[ -n "${ipa_path}" ]]; then
   ipa_checksum="$(shasum -a 256 "${ipa_path}" | awk '{print $1}')"
 fi
 
+testflight_result="${TESTFLIGHT_RESULT:-NOT RUN}"
+if [[ -f "${release_dir}/testflight-upload.txt" ]]; then
+  testflight_result="UPLOAD ACCEPTED FOR PROCESSING"
+fi
+
 cat > "${report_path}" <<REPORT
 # MiBand Navigator release report
 
@@ -64,7 +69,7 @@ cat > "${report_path}" <<REPORT
 | IPA result | ${ipa_result} |
 | IPA artifact name | ${ipa_name} |
 | IPA SHA-256 | ${ipa_checksum} |
-| TestFlight result | NOT RUN |
+| TestFlight result | ${testflight_result} |
 | Signing method | ${SIGNING_RESULT:-Not configured} |
 
 ## Verification boundaries
