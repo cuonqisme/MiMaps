@@ -1,0 +1,62 @@
+name: MiBandNavigator
+options:
+  minimumXcodeGenVersion: 2.44.1
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+configs:
+  Debug: debug
+  Release: release
+targets:
+  MiBandNavigator:
+    type: application
+    platform: iOS
+    sources:
+      - path: MiBandNavigator
+    info:
+      path: MiBandNavigator/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: MiBand Navigator
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSLocationWhenInUseUsageDescription: "Vị trí của bạn được dùng để cung cấp chỉ đường từng chặng khi phiên điều hướng đang hoạt động."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Vị trí của bạn được dùng để tiếp tục chỉ đường khi khóa màn hình hoặc chuyển ứng dụng."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.mibandnavigator
+        PRODUCT_NAME: MiBandNavigator
+        GENERATE_INFOPLIST_FILE: NO
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": NO
+        SUPPORTS_MACCATALYST: NO
+        TARGETED_DEVICE_FAMILY: "1"
+    scheme:
+      testTargets:
+        - MiBandNavigatorTests
+      gatherCoverageData: true
+  MiBandNavigatorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MiBandNavigatorTests
+    dependencies:
+      - target: MiBandNavigator
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.mibandnavigator.tests
+        GENERATE_INFOPLIST_FILE: YES
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": NO

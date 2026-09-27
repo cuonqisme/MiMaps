@@ -1,0 +1,24 @@
+# API compatibility
+
+Verified against official vendor documentation on 2026-09-27.
+
+| Area | Selected baseline | Notes |
+|---|---|---|
+| Apple toolchain | Xcode 26.6, Swift 6.2 | App Store Connect requires Xcode 26+ and an iOS 26 SDK from 2026-04-28. |
+| Deployment target | iOS 16.0 | Current Google Maps Platform iOS SDKs require iOS 16. |
+| GitHub runner | `macos-26` | Explicit runner; Xcode 26.6 is selected with `DEVELOPER_DIR`. |
+| Navigation SDK | 10.15.0 | Current stable release at verification time. Requires Xcode 26 and iOS 16. |
+| Maps SDK | 10.15.0 family | Navigation SDK extends Maps SDK; it is not integrated independently. |
+| Places Swift SDK | 10.15.0 | Package URL is `https://github.com/googlemaps/ios-places-sdk`; product is `GooglePlacesSwift`. |
+
+Google integration uses Swift Package Manager only and will pin exact versions. SDK types are isolated behind provider/service adapters. Simulator unit tests do not require an API key.
+
+## Official references
+
+- Apple Xcode 26 release notes: https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes
+- Apple upload requirements: https://developer.apple.com/news/upcoming-requirements/
+- GitHub macOS 26 image: https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md
+- Navigation SDK overview: https://developers.google.com/maps/documentation/navigation/ios-sdk/setup-overview
+- Navigation SDK release notes: https://developers.google.com/maps/documentation/navigation/ios-sdk/release-notes
+- Places SDK setup: https://developers.google.com/maps/documentation/places/ios-sdk/config
+
