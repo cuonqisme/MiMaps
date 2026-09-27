@@ -10,7 +10,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         if let apiKey = AppConfig.googleMapsAPIKey {
             GMSServices.provideAPIKey(apiKey)
-            PlacesClient.provideAPIKey(apiKey)
+            _ = PlacesClient.provideAPIKey(apiKey)
         }
 
         let category = UNNotificationCategory(
