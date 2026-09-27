@@ -9,6 +9,7 @@ The current MapKit build includes:
 - Alternative routes with distance, ETA, advantages, disadvantages, toll, and highway indicators.
 - Avoid-toll and avoid-highway preferences.
 - Nearby food, fuel, parking, hospital, pharmacy, ATM, coffee, and hotel search.
+- Live Apple Maps traffic display and an eight-item local recent-destination history.
 - Tap-to-select Apple map places, long-press pinning, and routing to nearby results.
 - Google Maps link import through the clipboard, including shortened `maps.app.goo.gl` links.
 - Current GPS speed on the phone and provider-neutral speed-limit/safety-camera notification models for a future licensed data provider.
@@ -34,7 +35,7 @@ git push -u origin feature/my-change
 
 Open the repository's **Actions** tab and inspect **iOS CI**. The workflow generates the Xcode project from `project.yml`, builds for an iPhone simulator, and runs XCTest without signing.
 
-Never commit Apple signing material. Native MapKit does not require a third-party API key. Direct appearance in the iOS share sheet requires a separately provisioned Share Extension; the current signed target instead supports Google Maps **Share → Copy link → Paste Google Maps link**.
+Never commit Apple signing material. Native MapKit does not require a third-party API key. Direct appearance in the iOS share sheet requires a separately provisioned Share Extension bundle ID and provisioning profile; the current signed target instead supports Google Maps **Share → Copy link → Paste Google Maps link**.
 
 Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [TestFlight](TESTFLIGHT.md), [testing](TESTING.md), [hardware testing](HARDWARE_TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
 

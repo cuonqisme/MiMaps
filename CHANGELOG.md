@@ -11,6 +11,12 @@
 - Added Google Maps clipboard-link import with short-link resolution and location-biased Apple place search.
 - Added professional iPhone maneuver icons and Mi Band-safe Unicode fallbacks with explicit text for sharp turns, U-turns, and roundabouts.
 - Added live GPS speed display and provider-neutral speed-limit/safety-camera alert notification support.
+- Fixed route overlays remaining visible after stopping navigation.
+- Prevented route-preview instructions from sending Mi Band notifications before navigation starts.
+- Fixed mock pause/resume and speed controls in SwiftUI forms and reduced the default simulation speed.
+- Replaced nearby free-text queries with MapKit point-of-interest category filters and explicit location-permission/GPS handling.
+- Redesigned destination search with a persistent modern search field, richer result cards, empty/error states, and a clearer Google Maps link importer.
+- Added locally stored recent destinations and a live Apple Maps traffic overlay toggle.
 - Added live maneuver, road, distance, ETA, reroute, and arrival feed mapping.
 - Added notification threshold/cooldown/deduplication pipeline and mock navigation.
 - Added background location lifecycle and contextual permission handling.
