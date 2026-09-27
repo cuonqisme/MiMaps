@@ -24,6 +24,8 @@ Never commit API keys or Apple signing material. Google Maps Platform setup, key
 
 Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Google Cloud](GOOGLE_CLOUD_SETUP.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [TestFlight](TESTFLIGHT.md), [testing](TESTING.md), [hardware testing](HARDWARE_TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
 
+Latest automated status and physical-verification boundaries are recorded in [RELEASE_REPORT.md](RELEASE_REPORT.md).
+
 ## Supported toolchain
 
 - Xcode 26.6 / Swift 6.2 on GitHub `macos-26`

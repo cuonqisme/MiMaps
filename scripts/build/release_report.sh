@@ -71,6 +71,9 @@ cat > "${report_path}" <<REPORT
 | IPA SHA-256 | ${ipa_checksum} |
 | TestFlight result | ${testflight_result} |
 | Signing method | ${SIGNING_RESULT:-Not configured} |
+| Physical iPhone tests | PENDING |
+| Mi Band symbols tested | NONE — physical hardware test pending |
+| Google navigation tests | SDK compiled and feed pipeline unit-tested; real route pending |
 
 ## Verification boundaries
 
