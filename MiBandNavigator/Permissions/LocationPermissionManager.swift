@@ -73,7 +73,7 @@ final class LocationPermissionManager: NSObject, ObservableObject, LocationPermi
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         status = Self.currentStatus(for: manager)
-        AppLogger.permission.info("Location permission changed: \(status.rawValue, privacy: .public)")
+        AppLogger.permission.info("Location permission changed: \(self.status.rawValue, privacy: .public)")
         guard status != .notDetermined, let continuation else { return }
         self.continuation = nil
         continuation.resume(returning: status)
