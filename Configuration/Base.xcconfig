@@ -1,4 +1,1 @@
-// Safe defaults. Secrets.xcconfig is local/CI-only and is ignored by Git.
-GOOGLE_MAPS_API_KEY =
-#include? "Secrets.xcconfig"
-
+// Shared non-secret build settings. Apple MapKit does not require an API key.

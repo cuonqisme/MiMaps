@@ -32,7 +32,6 @@ jobs:
       ARCHIVE_PATH: artifacts/release/MiBandNavigator.xcarchive
       EXPORT_PATH: artifacts/release/export
       EXPORT_METHOD: ${{ inputs.export_method }}
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
 
@@ -44,13 +43,6 @@ jobs:
           sw_vers
           xcodebuild -version
           swift --version
-
-      - name: Configure Google Maps API key when available
-        shell: bash
-        run: |
-          if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
-            printf 'GOOGLE_MAPS_API_KEY = %s\n' "${GOOGLE_MAPS_API_KEY}" > Configuration/Secrets.xcconfig
-          fi
 
       - name: Generate Xcode project
         run: bash scripts/ci/bootstrap.sh

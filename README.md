@@ -1,6 +1,6 @@
 # MiBand Navigator
 
-MiBand Navigator is a SwiftUI iPhone application that owns a Google Navigation SDK session and mirrors concise turn instructions to a Xiaomi Smart Band 9 through normal iOS notifications and Mi Fitness. Version 1 does not use proprietary Xiaomi BLE.
+MiBand Navigator is a SwiftUI iPhone application that uses Apple MapKit for search, route calculation, live step tracking, and rerouting. Concise turn instructions are mirrored to a Xiaomi Smart Band 9 through normal iOS notifications and Mi Fitness. The app does not use proprietary Xiaomi BLE.
 
 ## Current status
 
@@ -20,9 +20,9 @@ git push -u origin feature/my-change
 
 Open the repository's **Actions** tab and inspect **iOS CI**. The workflow generates the Xcode project from `project.yml`, builds for an iPhone simulator, and runs XCTest without signing.
 
-Never commit API keys or Apple signing material. Google Maps Platform setup, key restrictions, signed IPA, and TestFlight steps are documented as their implementation milestones land.
+Never commit Apple signing material. Native MapKit does not require a third-party API key.
 
-Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Google Cloud](GOOGLE_CLOUD_SETUP.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [TestFlight](TESTFLIGHT.md), [testing](TESTING.md), [hardware testing](HARDWARE_TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
+Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [TestFlight](TESTFLIGHT.md), [testing](TESTING.md), [hardware testing](HARDWARE_TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
 
 Latest automated status and physical-verification boundaries are recorded in [RELEASE_REPORT.md](RELEASE_REPORT.md).
 

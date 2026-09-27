@@ -29,7 +29,6 @@ jobs:
       ARCHIVE_PATH: artifacts/release/MiBandNavigator.xcarchive
       EXPORT_PATH: artifacts/release/export
       EXPORT_METHOD: app-store-connect
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
 
@@ -51,12 +50,6 @@ jobs:
             echo "Upload requested without the required UPLOAD confirmation." >&2
             exit 64
           fi
-
-      - name: Configure Google Maps API key
-        if: inputs.upload == true
-        run: |
-          : "${GOOGLE_MAPS_API_KEY:?GOOGLE_MAPS_API_KEY secret is required for TestFlight}"
-          printf 'GOOGLE_MAPS_API_KEY = %s\n' "${GOOGLE_MAPS_API_KEY}" > Configuration/Secrets.xcconfig
 
       - name: Generate Xcode project
         run: bash scripts/ci/bootstrap.sh

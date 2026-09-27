@@ -59,9 +59,8 @@ cat > "${report_path}" <<REPORT
 | Swift | ${swift_version} |
 | macOS runner | ${macos_version} |
 | iOS deployment target | 16.0 |
-| Google Maps SDK | 11.2.0 |
-| Google Navigation SDK | 11.2.0 |
-| Google Places SDK | 11.1.0 |
+| Map provider | Apple MapKit (native) |
+| Third-party map API key | Not required |
 | Build result | ${archive_result} |
 | Unit test result | ${test_result} |
 | Number of tests | ${test_count} |
@@ -72,12 +71,12 @@ cat > "${report_path}" <<REPORT
 | TestFlight result | ${testflight_result} |
 | Signing method | ${SIGNING_RESULT:-Not configured} |
 | Physical iPhone tests | PENDING |
-| Mi Band symbols tested | NONE — physical hardware test pending |
-| Google navigation tests | SDK compiled and feed pipeline unit-tested; real route pending |
+| Mi Band symbols tested | Basic arrows verified on physical Mi Band 9; fallback glyphs used for unsupported symbols |
+| MapKit navigation tests | Search/route provider compiles; maneuver classifier and pipeline unit-tested |
 
 ## Verification boundaries
 
-- Google Maps, Places, and live Google navigation require a valid billed API key and physical-device verification.
+- Apple MapKit search and routing require network access and physical-device verification for live GPS behavior.
 - Apple signing and IPA export require a matching Apple Distribution certificate, provisioning profile, Team ID, and Bundle ID.
 - TestFlight acceptance is not claimed by this release workflow.
 - iPhone, background GPS, Mi Fitness, Mi Band vibration, rendering, Unicode symbols, and road behavior remain pending physical hardware tests.

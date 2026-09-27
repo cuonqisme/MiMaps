@@ -1,58 +1,28 @@
-import GoogleMaps
-import GoogleNavigation
 import SwiftUI
 
 struct LegalView: View {
     var body: some View {
         List {
-            Section("Google Maps Platform") {
-                Text("Bản đồ, tìm kiếm địa điểm và dữ liệu điều hướng được cung cấp bởi Google Maps Platform. Thuộc tính Google trên bản đồ không bị che hoặc thay đổi.")
+            Section("Apple Maps") {
+                Text("Bản đồ, tìm kiếm địa điểm và dữ liệu tuyến đường được cung cấp bởi Apple MapKit.")
                 Link(
-                    "Điều khoản Google Maps Platform",
-                    destination: URL(string: "https://cloud.google.com/maps-platform/terms")!
+                    "Điều khoản Apple Maps",
+                    destination: URL(string: "https://www.apple.com/legal/internet-services/maps/terms-en.html")!
                 )
                 Link(
-                    "Chính sách quyền riêng tư Google",
-                    destination: URL(string: "https://policies.google.com/privacy")!
+                    "Chính sách quyền riêng tư Apple",
+                    destination: URL(string: "https://www.apple.com/legal/privacy/")!
                 )
             }
 
             Section("Dữ liệu và quyền riêng tư") {
-                Text("MiBand Navigator không có tài khoản người dùng, máy chủ riêng hoặc SDK phân tích. Ứng dụng không lưu lịch sử tọa độ. Google Maps Platform xử lý dữ liệu theo điều khoản và chính sách riêng của Google.")
+                Text("MiBand Navigator không có tài khoản người dùng, máy chủ riêng hoặc SDK phân tích. Ứng dụng không lưu lịch sử tọa độ. MapKit xử lý yêu cầu tìm kiếm và tuyến đường theo điều khoản của Apple.")
             }
 
-            Section("Giấy phép mã nguồn mở") {
-                NavigationLink("Google Maps SDK") {
-                    LicenseTextView(
-                        title: "Google Maps SDK",
-                        text: GMSServices.openSourceLicenseInfo()
-                    )
-                }
-                NavigationLink("Google Navigation SDK") {
-                    LicenseTextView(
-                        title: "Google Navigation SDK",
-                        text: GMSNavigationServices.openSourceLicenseInfo()
-                    )
-                }
+            Section("Mi Band") {
+                Text("Chỉ dẫn được gửi bằng thông báo cục bộ của iOS và phản chiếu qua Mi Fitness. Ứng dụng không kết nối trực tiếp tới thiết bị bằng giao thức BLE riêng của Xiaomi.")
             }
         }
         .navigationTitle("Pháp lý và quyền riêng tư")
-    }
-}
-
-private struct LicenseTextView: View {
-    let title: String
-    let text: String
-
-    var body: some View {
-        ScrollView {
-            Text(text)
-                .font(.caption.monospaced())
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-        }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
