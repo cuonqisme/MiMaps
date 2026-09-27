@@ -2,6 +2,20 @@
 
 MiBand Navigator is a SwiftUI iPhone application that uses Apple MapKit for search, route calculation, live step tracking, and rerouting. Concise turn instructions are mirrored to a Xiaomi Smart Band 9 through normal iOS notifications and Mi Fitness. The app does not use proprietary Xiaomi BLE.
 
+The current MapKit build includes:
+
+- Standard, muted, satellite, and hybrid map styles.
+- Car, walking, public-transit, and motorcycle-request modes. MapKit has no motorcycle transport type, so motorcycle requests visibly fall back to an automobile route.
+- Alternative routes with distance, ETA, advantages, disadvantages, toll, and highway indicators.
+- Avoid-toll and avoid-highway preferences.
+- Nearby food, fuel, parking, hospital, pharmacy, ATM, coffee, and hotel search.
+- Tap-to-select Apple map places, long-press pinning, and routing to nearby results.
+- Google Maps link import through the clipboard, including shortened `maps.app.goo.gl` links.
+- Current GPS speed on the phone and provider-neutral speed-limit/safety-camera notification models for a future licensed data provider.
+- Professional SF Symbols on the iPhone while Mi Band notifications use only the verified-safe `↑`, `←`, `→`, `↖`, `↗`, and `●` character set plus Vietnamese maneuver text.
+
+MapKit does not supply motorcycle-specific routes, speed-camera data, or a dedicated avoid-overpass option. The app never fabricates these values. A licensed provider such as TomTom can be integrated behind the existing navigation/safety models once its SDK entitlement and API key are supplied.
+
 ## Current status
 
 Simulator builds and tests run on GitHub-hosted macOS because the primary development environment is Windows. The release workflow always supports an unsigned archive validation and produces a signed IPA when Apple signing secrets are configured.
@@ -20,7 +34,7 @@ git push -u origin feature/my-change
 
 Open the repository's **Actions** tab and inspect **iOS CI**. The workflow generates the Xcode project from `project.yml`, builds for an iPhone simulator, and runs XCTest without signing.
 
-Never commit Apple signing material. Native MapKit does not require a third-party API key.
+Never commit Apple signing material. Native MapKit does not require a third-party API key. Direct appearance in the iOS share sheet requires a separately provisioned Share Extension; the current signed target instead supports Google Maps **Share → Copy link → Paste Google Maps link**.
 
 Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [TestFlight](TESTFLIGHT.md), [testing](TESTING.md), [hardware testing](HARDWARE_TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
 
