@@ -7,6 +7,7 @@ struct DeveloperToolsView: View {
     @ObservedObject private var mockProvider: MockNavigationProvider
     @ObservedObject private var googleCoordinator: NavigationCoordinator
     @ObservedObject private var googleProvider: GoogleNavigationProvider
+    @ObservedObject private var locationPermissionManager: LocationPermissionManager
     @StateObject private var viewModel: DeveloperToolsViewModel
 
     init(environment: AppEnvironment) {
@@ -15,6 +16,7 @@ struct DeveloperToolsView: View {
         _mockProvider = ObservedObject(wrappedValue: environment.mockNavigationProvider)
         _googleCoordinator = ObservedObject(wrappedValue: environment.googleNavigationCoordinator)
         _googleProvider = ObservedObject(wrappedValue: environment.googleNavigationProvider)
+        _locationPermissionManager = ObservedObject(wrappedValue: environment.locationPermissionManager)
         _viewModel = StateObject(
             wrappedValue: DeveloperToolsViewModel(
                 permissionManager: environment.notificationPermissionManager,
@@ -73,7 +75,7 @@ struct DeveloperToolsView: View {
                     NavigationDebugView(
                         coordinator: googleCoordinator,
                         googleProvider: googleProvider,
-                        locationPermissionManager: environment.locationPermissionManager,
+                        locationPermissionManager: locationPermissionManager,
                         settings: settings,
                         permissionManager: viewModel.permissionManagerForDebug
                     )
