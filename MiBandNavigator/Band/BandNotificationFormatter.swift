@@ -43,20 +43,20 @@ struct BandNotificationFormatter: Sendable {
         }
 
         return switch maneuver {
-        case .straight: "↑"
-        case .slightLeft: "↖"
-        case .left: "←"
-        case .sharpLeft: "↰"
-        case .slightRight: "↗"
-        case .right: "→"
-        case .sharpRight: "↱"
-        case .uTurnLeft: "↶"
-        case .uTurnRight: "↷"
-        case .mergeLeft, .forkLeft, .rampLeft: "↖"
-        case .mergeRight, .forkRight, .rampRight: "↗"
-        case .roundabout, .roundaboutExit: "⟳"
-        case .destination: "●"
-        case .unknown: "↑"
+        case .straight: "^"
+        case .slightLeft: "^<"
+        case .left: "<"
+        case .sharpLeft: "<<"
+        case .slightRight: "^>"
+        case .right: ">"
+        case .sharpRight: ">>"
+        case .uTurnLeft: "U<"
+        case .uTurnRight: "U>"
+        case .mergeLeft, .forkLeft, .rampLeft: "^<"
+        case .mergeRight, .forkRight, .rampRight: "^>"
+        case .roundabout, .roundaboutExit: "O"
+        case .destination: "*"
+        case .unknown: "^"
         }
     }
 
@@ -75,4 +75,3 @@ struct BandNotificationFormatter: Sendable {
         return value
     }
 }
-

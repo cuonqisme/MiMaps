@@ -3,7 +3,7 @@ import SwiftUI
 
 struct NavigationDebugView: View {
     @ObservedObject var coordinator: NavigationCoordinator
-    @ObservedObject var googleProvider: GoogleNavigationProvider
+    @ObservedObject var navigationProvider: AppleNavigationProvider
     @ObservedObject var locationPermissionManager: LocationPermissionManager
     @ObservedObject var settings: AppSettings
     let permissionManager: NotificationPermissionManaging
@@ -11,13 +11,13 @@ struct NavigationDebugView: View {
 
     init(
         coordinator: NavigationCoordinator,
-        googleProvider: GoogleNavigationProvider,
+        navigationProvider: AppleNavigationProvider,
         locationPermissionManager: LocationPermissionManager,
         settings: AppSettings,
         permissionManager: NotificationPermissionManaging
     ) {
         _coordinator = ObservedObject(wrappedValue: coordinator)
-        _googleProvider = ObservedObject(wrappedValue: googleProvider)
+        _navigationProvider = ObservedObject(wrappedValue: navigationProvider)
         _locationPermissionManager = ObservedObject(wrappedValue: locationPermissionManager)
         _settings = ObservedObject(wrappedValue: settings)
         self.permissionManager = permissionManager
@@ -30,30 +30,28 @@ struct NavigationDebugView: View {
                 debugRow("Bản dựng", buildNumber)
                 debugRow("Môi trường", buildConfiguration)
                 debugRow("Nhà cung cấp", coordinator.provider.providerName)
-                debugRow("Google Maps SDK", AppConfig.googleMapsSDKVersion)
-                debugRow("Google Navigation SDK", AppConfig.googleNavigationSDKVersion)
-                debugRow("Google Places SDK", AppConfig.googlePlacesSDKVersion)
-                debugRow("API Google", googleAPIStatus)
+                debugRow("Bản đồ", "Apple MapKit (native)")
+                debugRow("API key", "Không yêu cầu")
             }
 
             Section("Phiên điều hướng") {
-                debugRow("Phương tiện yêu cầu", googleProvider.requestedTravelMode.localizedName)
-                debugRow("Phương tiện đang dùng", googleProvider.activeTravelMode.localizedName)
-                debugRow("Fallback ô tô", googleProvider.fallbackUsed ? "Có" : "Không")
+                debugRow("Phương tiện yêu cầu", navigationProvider.requestedTravelMode.localizedName)
+                debugRow("Phương tiện đang dùng", navigationProvider.activeTravelMode.localizedName)
+                debugRow("Fallback ô tô", navigationProvider.fallbackUsed ? "Có" : "Không")
                 debugRow("Trạng thái", String(describing: coordinator.state))
-                debugRow("Phiên bản tuyến", String(googleProvider.routeRevision))
-                debugRow("Số lần đổi tuyến", String(googleProvider.routeChangeCount))
-                debugRow("Số lần định tuyến lại", String(googleProvider.rerouteCount))
-                debugRow("Raw maneuver", googleProvider.lastRawManeuverValue.map(String.init) ?? "—")
+                debugRow("Phiên bản tuyến", String(navigationProvider.routeRevision))
+                debugRow("Số lần đổi tuyến", String(navigationProvider.routeChangeCount))
+                debugRow("Số lần định tuyến lại", String(navigationProvider.rerouteCount))
+                debugRow("Chỉ dẫn MapKit", navigationProvider.lastInstructionText ?? "—")
             }
 
             Section("Vị trí hiện tại trong bộ nhớ") {
-                debugRow("Vĩ độ", coordinate(googleProvider.lastLatitude))
-                debugRow("Kinh độ", coordinate(googleProvider.lastLongitude))
-                debugRow("Tốc độ", speed(googleProvider.lastSpeedMetersPerSecond))
-                debugRow("Hướng", course(googleProvider.lastCourseDegrees))
-                debugRow("Cập nhật cuối", googleProvider.lastLocationUpdateAt?.formatted() ?? "—")
-                debugRow("Cập nhật nền", googleProvider.backgroundUpdatesActive ? "Đang chạy" : "Đã dừng")
+                debugRow("Vĩ độ", coordinate(navigationProvider.lastLatitude))
+                debugRow("Kinh độ", coordinate(navigationProvider.lastLongitude))
+                debugRow("Tốc độ", speed(navigationProvider.lastSpeedMetersPerSecond))
+                debugRow("Hướng", course(navigationProvider.lastCourseDegrees))
+                debugRow("Cập nhật cuối", navigationProvider.lastLocationUpdateAt?.formatted() ?? "—")
+                debugRow("Cập nhật nền", navigationProvider.backgroundUpdatesActive ? "Đang chạy" : "Đã dừng")
                 Text("Ảnh chụp vị trí chỉ giữ trong bộ nhớ khi đang điều hướng; không ghi lịch sử tọa độ.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -119,10 +117,6 @@ struct NavigationDebugView: View {
         #else
         "Release"
         #endif
-    }
-
-    private var googleAPIStatus: String {
-        AppConfig.googleAPIConfigurationStatus == .configured ? "Đã cấu hình" : "Thiếu API key"
     }
 
     private func coordinate(_ value: Double?) -> String {

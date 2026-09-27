@@ -5,8 +5,8 @@ struct DeveloperToolsView: View {
     @ObservedObject private var settings: AppSettings
     @ObservedObject private var coordinator: NavigationCoordinator
     @ObservedObject private var mockProvider: MockNavigationProvider
-    @ObservedObject private var googleCoordinator: NavigationCoordinator
-    @ObservedObject private var googleProvider: GoogleNavigationProvider
+    @ObservedObject private var liveCoordinator: NavigationCoordinator
+    @ObservedObject private var liveProvider: AppleNavigationProvider
     @ObservedObject private var locationPermissionManager: LocationPermissionManager
     @StateObject private var viewModel: DeveloperToolsViewModel
 
@@ -14,8 +14,8 @@ struct DeveloperToolsView: View {
         _settings = ObservedObject(wrappedValue: environment.settings)
         _coordinator = ObservedObject(wrappedValue: environment.navigationCoordinator)
         _mockProvider = ObservedObject(wrappedValue: environment.mockNavigationProvider)
-        _googleCoordinator = ObservedObject(wrappedValue: environment.googleNavigationCoordinator)
-        _googleProvider = ObservedObject(wrappedValue: environment.googleNavigationProvider)
+        _liveCoordinator = ObservedObject(wrappedValue: environment.liveNavigationCoordinator)
+        _liveProvider = ObservedObject(wrappedValue: environment.liveNavigationProvider)
         _locationPermissionManager = ObservedObject(wrappedValue: environment.locationPermissionManager)
         _viewModel = StateObject(
             wrappedValue: DeveloperToolsViewModel(
@@ -28,19 +28,19 @@ struct DeveloperToolsView: View {
 
     var body: some View {
         Form {
-            Section("Google Navigation") {
-                LabeledContent("Trạng thái", value: String(describing: googleCoordinator.state))
-                LabeledContent("Yêu cầu", value: googleProvider.requestedTravelMode.localizedName)
-                LabeledContent("Đang dùng", value: googleProvider.activeTravelMode.localizedName)
-                LabeledContent("Fallback ô tô", value: googleProvider.fallbackUsed ? "Có" : "Không")
-                LabeledContent("Phiên bản tuyến", value: String(googleProvider.routeRevision))
-                LabeledContent("Vị trí nền", value: googleProvider.backgroundUpdatesActive ? "Đang chạy" : "Đã dừng")
+            Section("Apple MapKit") {
+                LabeledContent("Trạng thái", value: String(describing: liveCoordinator.state))
+                LabeledContent("Yêu cầu", value: liveProvider.requestedTravelMode.localizedName)
+                LabeledContent("Đang dùng", value: liveProvider.activeTravelMode.localizedName)
+                LabeledContent("Fallback ô tô", value: liveProvider.fallbackUsed ? "Có" : "Không")
+                LabeledContent("Phiên bản tuyến", value: String(liveProvider.routeRevision))
+                LabeledContent("Vị trí nền", value: liveProvider.backgroundUpdatesActive ? "Đang chạy" : "Đã dừng")
                 LabeledContent(
                     "Cập nhật GPS cuối",
-                    value: googleProvider.lastLocationUpdateAt?.formatted() ?? "—"
+                    value: liveProvider.lastLocationUpdateAt?.formatted() ?? "—"
                 )
 
-                if let instruction = googleCoordinator.currentInstruction {
+                if let instruction = liveCoordinator.currentInstruction {
                     Text("\(BandNotificationFormatter().symbol(for: instruction.maneuver)) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters)) — \(instruction.roadName ?? "—")")
                         .font(.headline)
                 }
@@ -73,8 +73,8 @@ struct DeveloperToolsView: View {
 
                 NavigationLink("Mở bảng gỡ lỗi") {
                     NavigationDebugView(
-                        coordinator: googleCoordinator,
-                        googleProvider: googleProvider,
+                        coordinator: liveCoordinator,
+                        navigationProvider: liveProvider,
                         locationPermissionManager: locationPermissionManager,
                         settings: settings,
                         permissionManager: viewModel.permissionManagerForDebug

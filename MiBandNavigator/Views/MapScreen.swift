@@ -3,8 +3,8 @@ import UIKit
 
 struct MapScreen: View {
     let environment: AppEnvironment
-    @ObservedObject private var googleProvider: GoogleNavigationProvider
-    @ObservedObject private var googleCoordinator: NavigationCoordinator
+    @ObservedObject private var navigationProvider: AppleNavigationProvider
+    @ObservedObject private var navigationCoordinator: NavigationCoordinator
     @ObservedObject private var locationPermissionManager: LocationPermissionManager
     @ObservedObject private var settings: AppSettings
     @State private var selectedDestination: Destination?
@@ -15,77 +15,28 @@ struct MapScreen: View {
 
     init(environment: AppEnvironment) {
         self.environment = environment
-        _googleProvider = ObservedObject(wrappedValue: environment.googleNavigationProvider)
-        _googleCoordinator = ObservedObject(wrappedValue: environment.googleNavigationCoordinator)
+        _navigationProvider = ObservedObject(wrappedValue: environment.liveNavigationProvider)
+        _navigationCoordinator = ObservedObject(wrappedValue: environment.liveNavigationCoordinator)
         _locationPermissionManager = ObservedObject(wrappedValue: environment.locationPermissionManager)
         _settings = ObservedObject(wrappedValue: environment.settings)
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            mapContent
-                .ignoresSafeArea(edges: .bottom)
-
-            Group {
-                if let instruction = googleCoordinator.currentInstruction,
-                   googleCoordinator.state == .navigating
-                    || googleCoordinator.state == .rerouting
-                    || googleCoordinator.state == .arrived {
-                    ManeuverCardView(instruction: instruction)
-                } else {
-                    Button { isSearchPresented = true } label: {
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                            Text("Tìm điểm đến…")
-                            Spacer()
-                        }
-                        .foregroundStyle(.primary)
-                        .padding()
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                        .shadow(radius: 4, y: 2)
-                    }
-                    .accessibilityHint("Mở tìm kiếm địa điểm bằng Google Places")
-                }
-            }
-            .padding()
-
+        AppleMapView(
+            destination: selectedDestination,
+            navigationProvider: navigationProvider
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            topCard
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+        }
+        .overlay(alignment: .bottom) {
             if let selectedDestination {
-                VStack {
-                    Spacer()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(selectedDestination.displayName)
-                            .font(.headline)
-                        if let address = selectedDestination.formattedAddress {
-                            Text(address)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        routeActions(for: selectedDestination)
-
-                        if googleProvider.fallbackUsed {
-                            Label("Xe máy không được hỗ trợ; đang dùng tuyến ô tô.", systemImage: "exclamationmark.triangle")
-                                .font(.footnote)
-                                .foregroundStyle(.orange)
-                        }
-                        if let visibleError = routeError ?? googleCoordinator.lastError {
-                            Text(visibleError)
-                                .font(.footnote)
-                                .foregroundStyle(.red)
-                        }
-                        if let navigationWarning {
-                            Label(navigationWarning, systemImage: "exclamationmark.triangle")
-                                .font(.footnote)
-                                .foregroundStyle(.orange)
-                        }
-                        if shouldOfferSettings {
-                            Button("Mở Cài đặt iOS") { openSystemSettings() }
-                                .font(.footnote.weight(.semibold))
-                        }
-                    }
-                    .padding()
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .padding()
-                }
+                destinationCard(selectedDestination)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
             }
         }
         .navigationTitle("MiBand Navigator")
@@ -93,43 +44,105 @@ struct MapScreen: View {
         .sheet(isPresented: $isSearchPresented) {
             DestinationSearchView(searchService: environment.placesSearchService) { destination in
                 if selectedDestination?.id != destination.id,
-                   googleCoordinator.state == .routePreview
-                    || googleCoordinator.state == .navigating
-                    || googleCoordinator.state == .rerouting {
-                    googleCoordinator.stopNavigation()
+                   navigationCoordinator.state == .routePreview
+                    || navigationCoordinator.state == .navigating
+                    || navigationCoordinator.state == .rerouting {
+                    navigationCoordinator.stopNavigation()
                 }
                 selectedDestination = destination
                 routeError = nil
+                navigationWarning = nil
             }
         }
     }
 
     @ViewBuilder
-    private var mapContent: some View {
-        switch AppConfig.googleAPIConfigurationStatus {
-        case .configured:
-            GoogleMapView(
-                destination: selectedDestination,
-                navigationProvider: environment.googleNavigationProvider
-            )
-        case .missing:
-            VStack(spacing: 16) {
-                Image(systemName: "map.fill")
-                    .font(.system(size: 56))
-                    .foregroundStyle(.secondary)
-                Text("Chưa cấu hình Google Maps")
-                    .font(.title2.bold())
-                Text("Thêm GOOGLE_MAPS_API_KEY vào Configuration/Secrets.xcconfig hoặc GitHub Actions secret để tải bản đồ.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+    private var topCard: some View {
+        if let instruction = navigationCoordinator.currentInstruction,
+           navigationCoordinator.state == .navigating
+            || navigationCoordinator.state == .rerouting
+            || navigationCoordinator.state == .arrived {
+            ManeuverCardView(instruction: instruction)
+        } else {
+            Button { isSearchPresented = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                    Text("Tìm điểm đến…")
+                    Spacer()
+                }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 16)
+                .frame(minHeight: 52)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
             }
-            .padding(32)
+            .buttonStyle(.plain)
+            .accessibilityHint("Mở tìm kiếm địa điểm bằng Apple Maps")
         }
+    }
+
+    private func destinationCard(_ destination: Destination) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(destination.displayName)
+                        .font(.headline)
+                        .lineLimit(2)
+                    if let address = destination.formattedAddress {
+                        Text(address)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 8)
+                Button {
+                    navigationCoordinator.stopNavigation()
+                    selectedDestination = nil
+                    routeError = nil
+                    navigationWarning = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Đóng điểm đến")
+            }
+
+            routeActions(for: destination)
+
+            if navigationProvider.fallbackUsed {
+                Label(
+                    "Apple Maps chưa có tuyến xe máy; đang dùng tuyến ô tô.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.footnote)
+                .foregroundStyle(.orange)
+            }
+            if let visibleError = routeError ?? navigationCoordinator.lastError {
+                Text(visibleError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+            if let navigationWarning {
+                Label(navigationWarning, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+            if shouldOfferSettings {
+                Button("Mở Cài đặt iOS") { openSystemSettings() }
+                    .font(.footnote.weight(.semibold))
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.22), radius: 8, y: 4)
     }
 
     @ViewBuilder
     private func routeActions(for destination: Destination) -> some View {
-        switch googleCoordinator.state {
+        switch navigationCoordinator.state {
         case .calculatingRoute, .startingNavigation:
             ProgressView("Đang tính tuyến…")
                 .frame(maxWidth: .infinity)
@@ -141,7 +154,7 @@ struct MapScreen: View {
             .frame(maxWidth: .infinity)
         case .navigating, .rerouting:
             Button("DỪNG CHỈ ĐƯỜNG", role: .destructive) {
-                googleCoordinator.stopNavigation()
+                navigationCoordinator.stopNavigation()
             }
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity)
@@ -163,8 +176,8 @@ struct MapScreen: View {
         }
         routeError = nil
         shouldOfferSettings = false
-        await googleCoordinator.calculateRoute(to: destination, travelMode: settings.travelMode)
-        routeError = googleCoordinator.lastError
+        await navigationCoordinator.calculateRoute(to: destination, travelMode: settings.travelMode)
+        routeError = navigationCoordinator.lastError
     }
 
     private func startNavigation() async {
@@ -179,7 +192,7 @@ struct MapScreen: View {
         }
 
         routeError = nil
-        await googleCoordinator.startNavigation()
+        await navigationCoordinator.startNavigation()
     }
 
     private func openSystemSettings() {

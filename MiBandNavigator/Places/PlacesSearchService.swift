@@ -1,5 +1,5 @@
 import Foundation
-import GooglePlacesSwift
+import MapKit
 
 struct DestinationSuggestion: Sendable, Equatable, Hashable, Identifiable {
     let placeID: String
@@ -10,15 +10,12 @@ struct DestinationSuggestion: Sendable, Equatable, Hashable, Identifiable {
 }
 
 enum PlacesSearchError: LocalizedError, Equatable {
-    case configurationMissing
     case searchFailed(String)
     case detailsFailed(String)
     case invalidPlace
 
     var errorDescription: String? {
         switch self {
-        case .configurationMissing:
-            "Chưa cấu hình GOOGLE_MAPS_API_KEY hoặc chưa bật Places API (New)."
         case let .searchFailed(message):
             "Không thể tìm địa điểm: \(message)"
         case let .detailsFailed(message):
@@ -37,55 +34,89 @@ protocol PlacesSearching: AnyObject {
 }
 
 @MainActor
-final class GooglePlacesSearchService: PlacesSearching {
-    private var sessionToken = AutocompleteSessionToken()
+final class ApplePlacesSearchService: PlacesSearching {
+    private var cachedItems: [String: MKMapItem] = [:]
+    private var activeSearch: MKLocalSearch?
 
     func autocomplete(query: String) async throws -> [DestinationSuggestion] {
-        guard AppConfig.googleMapsAPIKey != nil else { throw PlacesSearchError.configurationMissing }
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return [] }
 
-        let request = AutocompleteRequest(query: normalized, sessionToken: sessionToken)
-        switch await PlacesClient.shared.fetchAutocompleteSuggestions(with: request) {
-        case let .success(values):
-            return values.compactMap { value in
-                guard case let .place(place) = value else { return nil }
+        activeSearch?.cancel()
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = normalized
+        request.resultTypes = [.address, .pointOfInterest]
+        let search = MKLocalSearch(request: request)
+        activeSearch = search
+
+        do {
+            let response = try await search.start()
+            guard activeSearch === search else { throw CancellationError() }
+            cachedItems.removeAll(keepingCapacity: true)
+
+            return response.mapItems.prefix(20).map { item in
+                let coordinate = coordinate(for: item)
+                let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let primaryText = (name?.isEmpty == false ? name : nil) ?? normalized
+                let identifier = String(
+                    format: "apple:%.7f,%.7f:%@",
+                    locale: Locale(identifier: "en_US_POSIX"),
+                    coordinate.latitude,
+                    coordinate.longitude,
+                    primaryText
+                )
+                cachedItems[identifier] = item
                 return DestinationSuggestion(
-                    placeID: place.placeID,
-                    primaryText: String(place.attributedPrimaryText.characters),
-                    secondaryText: place.attributedSecondaryText.map { String($0.characters) }
+                    placeID: identifier,
+                    primaryText: primaryText,
+                    secondaryText: formattedAddress(for: item)
                 )
             }
-        case let .failure(error):
-            throw PlacesSearchError.searchFailed(String(describing: error))
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw PlacesSearchError.searchFailed(error.localizedDescription)
         }
     }
 
     func resolve(_ suggestion: DestinationSuggestion) async throws -> Destination {
-        guard AppConfig.googleMapsAPIKey != nil else { throw PlacesSearchError.configurationMissing }
-        let request = FetchPlaceRequest(
-            placeID: suggestion.placeID,
-            placeProperties: [.placeID, .displayName, .formattedAddress, .coordinate],
-            sessionToken: sessionToken
-        )
-
-        switch await PlacesClient.shared.fetchPlace(with: request) {
-        case let .success(place):
-            defer { resetSession() }
-            return Destination(
-                placeID: place.placeID ?? suggestion.placeID,
-                displayName: place.displayName ?? suggestion.primaryText,
-                formattedAddress: place.formattedAddress ?? suggestion.secondaryText,
-                latitude: place.location.latitude,
-                longitude: place.location.longitude
-            )
-        case let .failure(error):
-            throw PlacesSearchError.detailsFailed(String(describing: error))
+        guard let item = cachedItems[suggestion.placeID] else {
+            throw PlacesSearchError.detailsFailed("Kết quả tìm kiếm đã hết hạn, vui lòng tìm lại.")
         }
+        let coordinate = coordinate(for: item)
+        guard CLLocationCoordinate2DIsValid(coordinate) else {
+            throw PlacesSearchError.invalidPlace
+        }
+
+        return Destination(
+            placeID: suggestion.placeID,
+            displayName: suggestion.primaryText,
+            formattedAddress: suggestion.secondaryText,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude
+        )
     }
 
     func resetSession() {
-        sessionToken = AutocompleteSessionToken()
+        activeSearch?.cancel()
+        activeSearch = nil
+        cachedItems.removeAll(keepingCapacity: false)
+    }
+
+    private func coordinate(for item: MKMapItem) -> CLLocationCoordinate2D {
+        if #available(iOS 26.0, *) {
+            return item.location.coordinate
+        } else {
+            return item.placemark.coordinate
+        }
+    }
+
+    private func formattedAddress(for item: MKMapItem) -> String? {
+        if #available(iOS 26.0, *) {
+            return item.addressRepresentations?.fullAddress(includingRegion: true, singleLine: true)
+                ?? item.address?.fullAddress
+        } else {
+            return item.placemark.title
+        }
     }
 }
-

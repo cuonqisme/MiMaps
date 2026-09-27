@@ -8,10 +8,10 @@ final class AppEnvironment: ObservableObject {
     let localNotificationService: LocalNotificationService
     let mockNavigationProvider: MockNavigationProvider
     let navigationCoordinator: NavigationCoordinator
-    let placesSearchService: GooglePlacesSearchService
+    let placesSearchService: ApplePlacesSearchService
     let locationPermissionManager: LocationPermissionManager
-    let googleNavigationProvider: GoogleNavigationProvider
-    let googleNavigationCoordinator: NavigationCoordinator
+    let liveNavigationProvider: AppleNavigationProvider
+    let liveNavigationCoordinator: NavigationCoordinator
     let navigationPermissionPreflight: NavigationPermissionPreflight
 
     init() {
@@ -19,15 +19,15 @@ final class AppEnvironment: ObservableObject {
         let notificationPermissionManager = NotificationPermissionManager()
         let localNotificationService = LocalNotificationService()
         let mockNavigationProvider = MockNavigationProvider()
-        let placesSearchService = GooglePlacesSearchService()
+        let placesSearchService = ApplePlacesSearchService()
         let locationPermissionManager = LocationPermissionManager()
-        let googleNavigationProvider = GoogleNavigationProvider()
+        let liveNavigationProvider = AppleNavigationProvider()
         let bandTransport = NotificationBandTransport(
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },
             soundEnabled: { settings.notificationSoundEnabled }
         )
-        let googleBandTransport = NotificationBandTransport(
+        let liveBandTransport = NotificationBandTransport(
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },
             soundEnabled: { settings.notificationSoundEnabled }
@@ -39,7 +39,7 @@ final class AppEnvironment: ObservableObject {
         self.mockNavigationProvider = mockNavigationProvider
         self.placesSearchService = placesSearchService
         self.locationPermissionManager = locationPermissionManager
-        self.googleNavigationProvider = googleNavigationProvider
+        self.liveNavigationProvider = liveNavigationProvider
         navigationPermissionPreflight = NavigationPermissionPreflight(
             locationManager: locationPermissionManager,
             notificationManager: notificationPermissionManager
@@ -49,9 +49,9 @@ final class AppEnvironment: ObservableObject {
             bandTransport: bandTransport,
             notificationThresholdProvider: { settings.notificationThresholds }
         )
-        googleNavigationCoordinator = NavigationCoordinator(
-            provider: googleNavigationProvider,
-            bandTransport: googleBandTransport,
+        liveNavigationCoordinator = NavigationCoordinator(
+            provider: liveNavigationProvider,
+            bandTransport: liveBandTransport,
             notificationThresholdProvider: { settings.notificationThresholds }
         )
     }

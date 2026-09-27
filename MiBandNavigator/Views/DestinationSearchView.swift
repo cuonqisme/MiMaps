@@ -50,13 +50,13 @@ struct DestinationSearchView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Text("Google Maps")
+                Label("Dữ liệu bản đồ Apple", systemImage: "apple.logo")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
                     .background(.bar)
-                    .accessibilityLabel("Google Maps")
+                    .accessibilityLabel("Dữ liệu bản đồ Apple")
             }
             .navigationTitle("Tìm điểm đến")
             .navigationBarTitleDisplayMode(.inline)
@@ -80,4 +80,3 @@ struct DestinationSearchView: View {
         }
     }
 }
-

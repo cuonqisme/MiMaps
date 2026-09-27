@@ -25,7 +25,7 @@ final class FormatterTests: XCTestCase {
 
         let content = formatter.format(instruction)
 
-        XCTAssertEqual(content.title, "↱ 120 m")
+        XCTAssertEqual(content.title, ">> 120 m")
         XCTAssertEqual(content.body, "Trần Phú")
         XCTAssertFalse(content.soundEnabled)
     }
@@ -36,16 +36,16 @@ final class FormatterTests: XCTestCase {
             makeInstruction(maneuver: .roundaboutExit(2), roadName: nil, distance: 200)
         )
 
-        XCTAssertEqual(content.title, "⟳ 200 m")
+        XCTAssertEqual(content.title, "O 200 m")
         XCTAssertEqual(content.body, "Lối ra 2")
     }
 
     func testBandFormatterHandlesUTurnUnknownAndMissingRoad() {
         let formatter = BandNotificationFormatter()
 
-        XCTAssertEqual(formatter.symbol(for: .uTurnLeft), "↶")
-        XCTAssertEqual(formatter.symbol(for: .uTurnRight), "↷")
-        XCTAssertEqual(formatter.symbol(for: .unknown), "↑")
+        XCTAssertEqual(formatter.symbol(for: .uTurnLeft), "U<")
+        XCTAssertEqual(formatter.symbol(for: .uTurnRight), "U>")
+        XCTAssertEqual(formatter.symbol(for: .unknown), "^")
         XCTAssertEqual(
             formatter.format(makeInstruction(maneuver: .unknown, roadName: " ", distance: 80)).body,
             "Tiếp tục theo tuyến đường"
@@ -54,15 +54,15 @@ final class FormatterTests: XCTestCase {
 
     func testBandFormatterSupportsSymbolOverridesAndDestination() {
         let formatter = BandNotificationFormatter(
-            symbols: ManeuverSymbolConfiguration(overrides: [.roundabout: "O", .sharpRight: "→"])
+            symbols: ManeuverSymbolConfiguration(overrides: [.roundabout: "R", .sharpRight: ">"])
         )
 
-        XCTAssertEqual(formatter.symbol(for: .roundabout), "O")
-        XCTAssertEqual(formatter.symbol(for: .roundaboutExit(3)), "O")
-        XCTAssertEqual(formatter.symbol(for: .sharpRight), "→")
+        XCTAssertEqual(formatter.symbol(for: .roundabout), "R")
+        XCTAssertEqual(formatter.symbol(for: .roundaboutExit(3)), "R")
+        XCTAssertEqual(formatter.symbol(for: .sharpRight), ">")
         XCTAssertEqual(
             formatter.format(makeInstruction(maneuver: .destination, roadName: nil, distance: 0)).title,
-            "● Đã đến nơi"
+            "* Đã đến nơi"
         )
     }
 }
@@ -84,4 +84,3 @@ private func makeInstruction(
         timestamp: timestamp
     )
 }
-

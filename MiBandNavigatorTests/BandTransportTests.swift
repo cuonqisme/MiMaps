@@ -28,7 +28,7 @@ final class BandTransportTests: XCTestCase {
         try await transport.send(value)
 
         XCTAssertEqual(scheduler.contents.count, 1)
-        XCTAssertEqual(scheduler.contents.first?.title, "→ 200 m")
+        XCTAssertEqual(scheduler.contents.first?.title, "> 200 m")
         XCTAssertEqual(scheduler.contents.first?.soundEnabled, true)
     }
 
@@ -76,4 +76,3 @@ private func instruction(step: String, distance: Double) -> NavigationInstructio
         timestamp: Date(timeIntervalSince1970: 1_000)
     )
 }
-
