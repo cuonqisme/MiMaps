@@ -29,7 +29,7 @@ enum LocationPermissionStatus: String, Sendable, Equatable {
 }
 
 @MainActor
-final class LocationPermissionManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+final class LocationPermissionManager: NSObject, ObservableObject, @MainActor CLLocationManagerDelegate {
     @Published private(set) var status: LocationPermissionStatus
 
     private let manager: CLLocationManager
@@ -71,4 +71,3 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
         }
     }
 }
-
