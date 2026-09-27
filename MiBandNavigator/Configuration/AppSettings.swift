@@ -9,6 +9,8 @@ final class AppSettings: ObservableObject {
         static let developerModeEnabled = "developerModeEnabled"
         static let travelMode = "travelMode"
         static let mapDisplayStyle = "mapDisplayStyle"
+        static let showTraffic = "showTraffic"
+        static let recentDestinations = "recentDestinations"
         static let avoidTolls = "avoidTolls"
         static let avoidHighways = "avoidHighways"
         static let farThresholdMeters = "farThresholdMeters"
@@ -38,6 +40,12 @@ final class AppSettings: ObservableObject {
     @Published var mapDisplayStyle: MapDisplayStyle {
         didSet { defaults.set(mapDisplayStyle.rawValue, forKey: Key.mapDisplayStyle) }
     }
+
+    @Published var showTraffic: Bool {
+        didSet { defaults.set(showTraffic, forKey: Key.showTraffic) }
+    }
+
+    @Published private(set) var recentDestinations: [Destination]
 
     @Published var avoidTolls: Bool {
         didSet { defaults.set(avoidTolls, forKey: Key.avoidTolls) }
@@ -76,6 +84,8 @@ final class AppSettings: ObservableObject {
         mapDisplayStyle = MapDisplayStyle(
             rawValue: defaults.string(forKey: Key.mapDisplayStyle) ?? ""
         ) ?? .standard
+        showTraffic = defaults.object(forKey: Key.showTraffic) as? Bool ?? true
+        recentDestinations = Self.storedDestinations(defaults: defaults)
         avoidTolls = defaults.object(forKey: Key.avoidTolls) as? Bool ?? false
         avoidHighways = defaults.object(forKey: Key.avoidHighways) as? Bool ?? false
         farThresholdMeters = Self.storedPositiveInt(
@@ -102,6 +112,37 @@ final class AppSettings: ObservableObject {
 
     var routePreferences: RoutePreferences {
         RoutePreferences(avoidTolls: avoidTolls, avoidHighways: avoidHighways)
+    }
+
+    func recordRecentDestination(_ destination: Destination) {
+        var updated = recentDestinations.filter { existing in
+            if let placeID = destination.placeID, let existingPlaceID = existing.placeID {
+                return placeID != existingPlaceID
+            }
+            return abs(existing.latitude - destination.latitude) > 0.000_01
+                || abs(existing.longitude - destination.longitude) > 0.000_01
+        }
+        updated.insert(destination, at: 0)
+        recentDestinations = Array(updated.prefix(8))
+        persistRecentDestinations()
+    }
+
+    func clearRecentDestinations() {
+        recentDestinations = []
+        defaults.removeObject(forKey: Key.recentDestinations)
+    }
+
+    private func persistRecentDestinations() {
+        guard let data = try? JSONEncoder().encode(recentDestinations) else { return }
+        defaults.set(data, forKey: Key.recentDestinations)
+    }
+
+    private static func storedDestinations(defaults: UserDefaults) -> [Destination] {
+        guard let data = defaults.data(forKey: Key.recentDestinations),
+              let values = try? JSONDecoder().decode([Destination].self, from: data) else {
+            return []
+        }
+        return Array(values.prefix(8))
     }
 
     private static func storedPositiveInt(

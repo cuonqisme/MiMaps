@@ -34,6 +34,7 @@ struct MapScreen: View {
             nearbyDestinations: nearbyDestinations,
             navigationProvider: navigationProvider,
             displayStyle: settings.mapDisplayStyle,
+            showsTraffic: settings.showTraffic,
             recenterRequest: recenterRequest,
             onUserLocationChange: { coordinate in
                 currentUserCoordinate = coordinate
@@ -66,7 +67,9 @@ struct MapScreen: View {
         .sheet(isPresented: $isSearchPresented) {
             DestinationSearchView(
                 searchService: environment.placesSearchService,
-                sharedLocationImporter: environment.sharedLocationImporter
+                sharedLocationImporter: environment.sharedLocationImporter,
+                recentDestinations: settings.recentDestinations,
+                onClearRecent: { settings.clearRecentDestinations() }
             ) { destination in
                 selectDestination(destination)
             }
@@ -97,6 +100,15 @@ struct MapScreen: View {
                                 : style.systemImage
                         )
                     }
+                }
+                Divider()
+                Button {
+                    settings.showTraffic.toggle()
+                } label: {
+                    Label(
+                        settings.showTraffic ? "Ẩn giao thông" : "Hiện giao thông",
+                        systemImage: settings.showTraffic ? "car.2.slash" : "car.2.fill"
+                    )
                 }
             } label: {
                 mapControlIcon(settings.mapDisplayStyle.systemImage)
@@ -390,6 +402,7 @@ struct MapScreen: View {
             navigationCoordinator.stopNavigation()
         }
         selectedDestination = destination
+        settings.recordRecentDestination(destination)
         routeError = nil
         navigationWarning = nil
         nearbyError = nil

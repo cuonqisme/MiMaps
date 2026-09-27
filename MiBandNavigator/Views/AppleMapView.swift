@@ -6,6 +6,7 @@ struct AppleMapView: UIViewRepresentable {
     let nearbyDestinations: [Destination]
     @ObservedObject var navigationProvider: AppleNavigationProvider
     let displayStyle: MapDisplayStyle
+    let showsTraffic: Bool
     let recenterRequest: Int
     let onUserLocationChange: (CLLocationCoordinate2D) -> Void
     let onDestinationSelected: (Destination) -> Void
@@ -25,6 +26,7 @@ struct AppleMapView: UIViewRepresentable {
         mapView.showsUserLocation = true
         mapView.selectableMapFeatures = [.pointsOfInterest]
         mapView.mapType = displayStyle.mapType
+        mapView.showsTraffic = showsTraffic
         let longPress = UILongPressGestureRecognizer(
             target: context.coordinator,
             action: #selector(Coordinator.handleLongPress(_:))
@@ -45,6 +47,9 @@ struct AppleMapView: UIViewRepresentable {
         context.coordinator.onDestinationSelected = onDestinationSelected
         if mapView.mapType != displayStyle.mapType {
             mapView.mapType = displayStyle.mapType
+        }
+        if mapView.showsTraffic != showsTraffic {
+            mapView.showsTraffic = showsTraffic
         }
 
         if context.coordinator.recenterRequest != recenterRequest {

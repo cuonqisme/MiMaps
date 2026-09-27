@@ -37,6 +37,10 @@ struct SettingsView: View {
                         Label(style.localizedName, systemImage: style.systemImage).tag(style)
                     }
                 }
+                Toggle("Hiển thị giao thông trực tiếp", isOn: $settings.showTraffic)
+                Text("Mức độ phủ sóng giao thông phụ thuộc dữ liệu Apple Maps tại khu vực hiện tại.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Thông báo Mi Band") {

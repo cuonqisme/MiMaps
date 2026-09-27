@@ -5,11 +5,15 @@ struct DestinationSearchView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: DestinationSearchViewModel
     @FocusState private var isSearchFocused: Bool
+    let recentDestinations: [Destination]
+    let onClearRecent: () -> Void
     let onSelection: (Destination) -> Void
 
     init(
         searchService: PlacesSearching,
         sharedLocationImporter: SharedLocationImporting? = nil,
+        recentDestinations: [Destination] = [],
+        onClearRecent: @escaping () -> Void = {},
         onSelection: @escaping (Destination) -> Void
     ) {
         _viewModel = StateObject(
@@ -18,6 +22,8 @@ struct DestinationSearchView: View {
                 sharedLocationImporter: sharedLocationImporter
             )
         )
+        self.recentDestinations = recentDestinations
+        self.onClearRecent = onClearRecent
         self.onSelection = onSelection
     }
 
@@ -38,7 +44,11 @@ struct DestinationSearchView: View {
                         googleMapsImportButton
 
                         if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            searchHint
+                            if recentDestinations.isEmpty {
+                                searchHint
+                            } else {
+                                recentDestinationsSection
+                            }
                         } else if !viewModel.isLoading && viewModel.suggestions.isEmpty
                                     && viewModel.errorMessage == nil {
                             emptyState(
@@ -173,6 +183,56 @@ struct DestinationSearchView: View {
             systemImage: "map.fill",
             description: "Nhập tên địa điểm, địa chỉ, quận hoặc thành phố để có kết quả chính xác hơn."
         )
+    }
+
+    private var recentDestinationsSection: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("Gần đây")
+                    .font(.headline)
+                Spacer()
+                Button("Xóa") { onClearRecent() }
+                    .font(.subheadline)
+            }
+            .padding(.horizontal, 4)
+
+            ForEach(recentDestinations) { destination in
+                Button {
+                    onSelection(destination)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, height: 40)
+                            .background(Color.secondary.opacity(0.1), in: Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(destination.displayName)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            if let address = destination.formattedAddress {
+                                Text(address)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.bold())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(12)
+                    .background(
+                        Color(uiColor: .secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 16)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private func emptyState(title: String, systemImage: String, description: String) -> some View {
