@@ -19,6 +19,13 @@ struct BandNotificationFormatter: Sendable {
         _ instruction: NavigationInstruction,
         soundEnabled: Bool = false
     ) -> NavigationNotificationContent {
+        if let alert = instruction.safetyAlert {
+            return safetyContent(
+                alert,
+                instruction: instruction,
+                soundEnabled: soundEnabled
+            )
+        }
         let symbol = symbol(for: instruction.maneuver)
         if instruction.maneuver == .destination {
             return NavigationNotificationContent(
@@ -31,10 +38,41 @@ struct BandNotificationFormatter: Sendable {
 
         return NavigationNotificationContent(
             title: "\(symbol) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters))",
-            body: body(for: instruction),
+            body: bodyWithSpeed(for: instruction),
             categoryIdentifier: LocalNotificationService.navigationCategoryIdentifier,
             soundEnabled: soundEnabled
         )
+    }
+
+    private func safetyContent(
+        _ alert: NavigationSafetyAlert,
+        instruction: NavigationInstruction,
+        soundEnabled: Bool
+    ) -> NavigationNotificationContent {
+        var details: [String] = []
+        if let limit = alert.speedLimitKPH ?? instruction.speedLimitKPH {
+            details.append("Giới hạn \(Int(limit.rounded())) km/h")
+        }
+        if let speed = instruction.currentSpeedKPH {
+            details.append("Đang đi \(Int(speed.rounded())) km/h")
+        }
+        return NavigationNotificationContent(
+            title: "● \(alert.kind.localizedName) \(DistanceFormatter.string(fromMeters: alert.distanceMeters))",
+            body: details.isEmpty ? "Chú ý phía trước" : details.joined(separator: " • "),
+            categoryIdentifier: LocalNotificationService.navigationCategoryIdentifier,
+            soundEnabled: soundEnabled
+        )
+    }
+
+    private func bodyWithSpeed(for instruction: NavigationInstruction) -> String {
+        var details = [body(for: instruction)]
+        if let limit = instruction.speedLimitKPH {
+            details.append("Giới hạn \(Int(limit.rounded())) km/h")
+        }
+        if let speed = instruction.currentSpeedKPH {
+            details.append("Tốc độ \(Int(speed.rounded())) km/h")
+        }
+        return details.joined(separator: " • ")
     }
 
     func symbol(for maneuver: NavigationManeuver) -> String {

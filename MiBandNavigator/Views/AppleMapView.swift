@@ -4,8 +4,13 @@ import SwiftUI
 struct AppleMapView: UIViewRepresentable {
     let destination: Destination?
     @ObservedObject var navigationProvider: AppleNavigationProvider
+    let displayStyle: MapDisplayStyle
+    let recenterRequest: Int
+    let onUserLocationChange: (CLLocationCoordinate2D) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onUserLocationChange: onUserLocationChange)
+    }
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -13,9 +18,7 @@ struct AppleMapView: UIViewRepresentable {
         mapView.preferredConfiguration = MKStandardMapConfiguration(elevationStyle: .flat)
         mapView.showsCompass = true
         mapView.showsUserLocation = true
-        if #available(iOS 17.0, *) {
-            mapView.showsUserTrackingButton = true
-        }
+        mapView.mapType = displayStyle.mapType
         mapView.setRegion(
             MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: 21.0285, longitude: 105.8542),
@@ -27,6 +30,16 @@ struct AppleMapView: UIViewRepresentable {
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
+        context.coordinator.onUserLocationChange = onUserLocationChange
+        if mapView.mapType != displayStyle.mapType {
+            mapView.mapType = displayStyle.mapType
+        }
+
+        if context.coordinator.recenterRequest != recenterRequest {
+            context.coordinator.recenterRequest = recenterRequest
+            mapView.setUserTrackingMode(.followWithHeading, animated: true)
+        }
+
         if context.coordinator.destinationID != destination?.id {
             context.coordinator.destinationID = destination?.id
             let removable = mapView.annotations.filter { !($0 is MKUserLocation) }
@@ -69,6 +82,29 @@ struct AppleMapView: UIViewRepresentable {
     final class Coordinator: NSObject, MKMapViewDelegate {
         var destinationID: UUID?
         var routeRevision = -1
+        var recenterRequest = 0
+        var hasCenteredInitialLocation = false
+        var onUserLocationChange: (CLLocationCoordinate2D) -> Void
+
+        init(onUserLocationChange: @escaping (CLLocationCoordinate2D) -> Void) {
+            self.onUserLocationChange = onUserLocationChange
+        }
+
+        func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+            guard let location = userLocation.location,
+                  location.horizontalAccuracy >= 0 else { return }
+            onUserLocationChange(location.coordinate)
+            guard !hasCenteredInitialLocation else { return }
+            hasCenteredInitialLocation = true
+            mapView.setRegion(
+                MKCoordinateRegion(
+                    center: location.coordinate,
+                    latitudinalMeters: 2_000,
+                    longitudinalMeters: 2_000
+                ),
+                animated: true
+            )
+        }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             _ = mapView
@@ -79,6 +115,17 @@ struct AppleMapView: UIViewRepresentable {
             renderer.lineCap = .round
             renderer.lineJoin = .round
             return renderer
+        }
+    }
+}
+
+private extension MapDisplayStyle {
+    var mapType: MKMapType {
+        switch self {
+        case .standard: .standard
+        case .muted: .mutedStandard
+        case .satellite: .satellite
+        case .hybrid: .hybrid
         }
     }
 }

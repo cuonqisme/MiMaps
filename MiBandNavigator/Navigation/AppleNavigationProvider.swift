@@ -244,7 +244,8 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
                 remainingDistanceMeters: remainingDistance,
                 remainingTimeSeconds: remainingTime,
                 stepIdentifier: "apple-\(routeRevision)-\(nextIndex)",
-                timestamp: location.timestamp
+                timestamp: location.timestamp,
+                currentSpeedKPH: location.speed >= 0 ? location.speed * 3.6 : nil
             )
         )
     }

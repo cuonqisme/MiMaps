@@ -7,6 +7,8 @@ struct BandNotificationDecision: Sendable, Equatable {
         case cooldown
         case noThresholdCrossing
         case duplicateArrival
+        case safetyAlert
+        case duplicateSafetyAlert
     }
 
     let notification: NavigationInstruction?
@@ -24,6 +26,7 @@ struct BandNotificationPolicy: Sendable {
     private(set) var pendingThresholds: Set<Int> = []
     private(set) var lastNotificationTimestamp: Date?
     private var arrivalSent = false
+    private var sentSafetyAlertIdentifiers: Set<String> = []
 
     init(
         thresholds: [Int] = [500, 200, 80, 30],
@@ -34,6 +37,22 @@ struct BandNotificationPolicy: Sendable {
     }
 
     mutating func evaluate(_ instruction: NavigationInstruction) -> BandNotificationDecision {
+        if let alert = instruction.safetyAlert {
+            guard sentSafetyAlertIdentifiers.insert(alert.identifier).inserted else {
+                return BandNotificationDecision(
+                    notification: nil,
+                    crossedThresholds: [],
+                    reason: .duplicateSafetyAlert
+                )
+            }
+            lastNotificationTimestamp = instruction.timestamp
+            return BandNotificationDecision(
+                notification: instruction,
+                crossedThresholds: [],
+                reason: .safetyAlert
+            )
+        }
+
         let isNewStep = currentStepIdentifier != instruction.stepIdentifier
         if isNewStep {
             currentStepIdentifier = instruction.stepIdentifier
@@ -111,5 +130,6 @@ struct BandNotificationPolicy: Sendable {
         pendingThresholds.removeAll(keepingCapacity: true)
         lastNotificationTimestamp = nil
         arrivalSent = false
+        sentSafetyAlertIdentifiers.removeAll(keepingCapacity: true)
     }
 }

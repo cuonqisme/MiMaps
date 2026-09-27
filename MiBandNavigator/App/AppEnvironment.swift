@@ -9,6 +9,7 @@ final class AppEnvironment: ObservableObject {
     let mockNavigationProvider: MockNavigationProvider
     let navigationCoordinator: NavigationCoordinator
     let placesSearchService: ApplePlacesSearchService
+    let sharedLocationImporter: GoogleMapsLocationImporter
     let locationPermissionManager: LocationPermissionManager
     let liveNavigationProvider: AppleNavigationProvider
     let liveNavigationCoordinator: NavigationCoordinator
@@ -38,6 +39,7 @@ final class AppEnvironment: ObservableObject {
         self.localNotificationService = localNotificationService
         self.mockNavigationProvider = mockNavigationProvider
         self.placesSearchService = placesSearchService
+        sharedLocationImporter = GoogleMapsLocationImporter(searchService: placesSearchService)
         self.locationPermissionManager = locationPermissionManager
         self.liveNavigationProvider = liveNavigationProvider
         navigationPermissionPreflight = NavigationPermissionPreflight(

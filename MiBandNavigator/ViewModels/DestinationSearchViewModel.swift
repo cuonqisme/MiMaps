@@ -9,9 +9,14 @@ final class DestinationSearchViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     private let searchService: PlacesSearching
+    private let sharedLocationImporter: SharedLocationImporting?
 
-    init(searchService: PlacesSearching) {
+    init(
+        searchService: PlacesSearching,
+        sharedLocationImporter: SharedLocationImporting? = nil
+    ) {
         self.searchService = searchService
+        self.sharedLocationImporter = sharedLocationImporter
     }
 
     func search() async {
@@ -48,8 +53,24 @@ final class DestinationSearchViewModel: ObservableObject {
         }
     }
 
+    func importSharedLink(_ text: String) async -> Destination? {
+        guard let sharedLocationImporter else {
+            errorMessage = SharedMapLocationError.unsupportedLink.localizedDescription
+            return nil
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let destination = try await sharedLocationImporter.importDestination(from: text)
+            errorMessage = nil
+            return destination
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func cancel() {
         searchService.resetSession()
     }
 }
-

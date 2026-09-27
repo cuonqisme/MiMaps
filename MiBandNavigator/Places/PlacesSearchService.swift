@@ -37,6 +37,19 @@ protocol PlacesSearching: AnyObject {
 final class ApplePlacesSearchService: PlacesSearching {
     private var cachedItems: [String: MKMapItem] = [:]
     private var activeSearch: MKLocalSearch?
+    private var searchRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 16.0, longitude: 106.0),
+        span: MKCoordinateSpan(latitudeDelta: 16.0, longitudeDelta: 12.0)
+    )
+
+    func updateSearchCenter(_ coordinate: CLLocationCoordinate2D) {
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return }
+        searchRegion = MKCoordinateRegion(
+            center: coordinate,
+            latitudinalMeters: 80_000,
+            longitudinalMeters: 80_000
+        )
+    }
 
     func autocomplete(query: String) async throws -> [DestinationSuggestion] {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -46,6 +59,7 @@ final class ApplePlacesSearchService: PlacesSearching {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = normalized
         request.resultTypes = [.address, .pointOfInterest]
+        request.region = searchRegion
         let search = MKLocalSearch(request: request)
         activeSearch = search
 

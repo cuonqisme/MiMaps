@@ -59,6 +59,36 @@ final class DestinationSearchViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.errorMessage)
         XCTAssertTrue(viewModel.suggestions.isEmpty)
     }
+
+    func testImportsSharedGoogleMapsDestination() async {
+        let expected = Destination(displayName: "Đích", latitude: 21, longitude: 105)
+        let importer = SharedLocationImporterFake(destination: expected)
+        let viewModel = DestinationSearchViewModel(
+            searchService: PlacesSearchServiceFake(),
+            sharedLocationImporter: importer
+        )
+
+        let destination = await viewModel.importSharedLink("https://maps.app.goo.gl/test")
+
+        XCTAssertEqual(destination, expected)
+        XCTAssertEqual(importer.links, ["https://maps.app.goo.gl/test"])
+        XCTAssertNil(viewModel.errorMessage)
+    }
+}
+
+@MainActor
+private final class SharedLocationImporterFake: SharedLocationImporting {
+    let destination: Destination
+    private(set) var links: [String] = []
+
+    init(destination: Destination) {
+        self.destination = destination
+    }
+
+    func importDestination(from text: String) async throws -> Destination {
+        links.append(text)
+        return destination
+    }
 }
 
 @MainActor

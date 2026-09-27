@@ -25,6 +25,14 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
+            Section("Bản đồ") {
+                Picker("Kiểu bản đồ", selection: $settings.mapDisplayStyle) {
+                    ForEach(MapDisplayStyle.allCases) { style in
+                        Label(style.localizedName, systemImage: style.systemImage).tag(style)
+                    }
+                }
+            }
+
             Section("Thông báo Mi Band") {
                 Toggle("Bật thông báo điều hướng", isOn: $settings.bandNotificationsEnabled)
                 Toggle("Âm thanh trên điện thoại", isOn: $settings.notificationSoundEnabled)

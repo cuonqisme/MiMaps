@@ -8,6 +8,9 @@ struct NavigationInstruction: Sendable, Equatable, Hashable {
     let remainingTimeSeconds: TimeInterval
     let stepIdentifier: String
     let timestamp: Date
+    let currentSpeedKPH: Double?
+    let speedLimitKPH: Double?
+    let safetyAlert: NavigationSafetyAlert?
 
     init(
         maneuver: NavigationManeuver,
@@ -16,7 +19,10 @@ struct NavigationInstruction: Sendable, Equatable, Hashable {
         remainingDistanceMeters: Double,
         remainingTimeSeconds: TimeInterval,
         stepIdentifier: String,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        currentSpeedKPH: Double? = nil,
+        speedLimitKPH: Double? = nil,
+        safetyAlert: NavigationSafetyAlert? = nil
     ) {
         self.maneuver = maneuver
         self.roadName = roadName
@@ -25,6 +31,9 @@ struct NavigationInstruction: Sendable, Equatable, Hashable {
         self.remainingTimeSeconds = max(0, remainingTimeSeconds)
         self.stepIdentifier = stepIdentifier
         self.timestamp = timestamp
+        self.currentSpeedKPH = currentSpeedKPH.map { max(0, $0) }
+        self.speedLimitKPH = speedLimitKPH.map { max(0, $0) }
+        self.safetyAlert = safetyAlert
     }
 
     func replacingDistanceToManeuver(with distance: Double) -> NavigationInstruction {
@@ -35,8 +44,10 @@ struct NavigationInstruction: Sendable, Equatable, Hashable {
             remainingDistanceMeters: remainingDistanceMeters,
             remainingTimeSeconds: remainingTimeSeconds,
             stepIdentifier: stepIdentifier,
-            timestamp: timestamp
+            timestamp: timestamp,
+            currentSpeedKPH: currentSpeedKPH,
+            speedLimitKPH: speedLimitKPH,
+            safetyAlert: safetyAlert
         )
     }
 }
-

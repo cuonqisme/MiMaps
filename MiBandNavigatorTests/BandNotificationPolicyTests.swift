@@ -102,6 +102,27 @@ final class BandNotificationPolicyTests: XCTestCase {
         XCTAssertEqual(policy.evaluate(arrival).reason, .duplicateArrival)
     }
 
+    func testSafetyAlertIsSentImmediatelyAndOnlyOnce() {
+        var policy = BandNotificationPolicy()
+        let alert = NavigationSafetyAlert(
+            identifier: "camera-1",
+            kind: .fixedSpeedCamera,
+            distanceMeters: 500
+        )
+        let item = NavigationInstruction(
+            maneuver: .straight,
+            roadName: nil,
+            distanceToManeuverMeters: 1_000,
+            remainingDistanceMeters: 3_000,
+            remainingTimeSeconds: 300,
+            stepIdentifier: "step",
+            safetyAlert: alert
+        )
+
+        XCTAssertEqual(policy.evaluate(item).reason, .safetyAlert)
+        XCTAssertEqual(policy.evaluate(item).reason, .duplicateSafetyAlert)
+    }
+
     private func instruction(
         distance: Double,
         maneuver: NavigationManeuver = .right,

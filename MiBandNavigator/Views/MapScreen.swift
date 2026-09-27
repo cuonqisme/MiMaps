@@ -12,6 +12,7 @@ struct MapScreen: View {
     @State private var routeError: String?
     @State private var navigationWarning: String?
     @State private var shouldOfferSettings = false
+    @State private var recenterRequest = 0
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -24,7 +25,12 @@ struct MapScreen: View {
     var body: some View {
         AppleMapView(
             destination: selectedDestination,
-            navigationProvider: navigationProvider
+            navigationProvider: navigationProvider,
+            displayStyle: settings.mapDisplayStyle,
+            recenterRequest: recenterRequest,
+            onUserLocationChange: { coordinate in
+                environment.placesSearchService.updateSearchCenter(coordinate)
+            }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .top) {
@@ -39,10 +45,18 @@ struct MapScreen: View {
                     .padding(.bottom, 12)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            mapControls
+                .padding(.trailing, 16)
+                .padding(.top, controlsTopPadding)
+        }
         .navigationTitle("MiBand Navigator")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isSearchPresented) {
-            DestinationSearchView(searchService: environment.placesSearchService) { destination in
+            DestinationSearchView(
+                searchService: environment.placesSearchService,
+                sharedLocationImporter: environment.sharedLocationImporter
+            ) { destination in
                 if selectedDestination?.id != destination.id,
                    navigationCoordinator.state == .routePreview
                     || navigationCoordinator.state == .navigating
@@ -54,6 +68,70 @@ struct MapScreen: View {
                 navigationWarning = nil
             }
         }
+    }
+
+    private var controlsTopPadding: CGFloat {
+        isActivelyNavigating ? 184 : 76
+    }
+
+    private var isActivelyNavigating: Bool {
+        navigationCoordinator.state == .navigating
+            || navigationCoordinator.state == .rerouting
+            || navigationCoordinator.state == .arrived
+    }
+
+    private var mapControls: some View {
+        VStack(spacing: 10) {
+            Menu {
+                ForEach(MapDisplayStyle.allCases) { style in
+                    Button {
+                        settings.mapDisplayStyle = style
+                    } label: {
+                        Label(
+                            style.localizedName,
+                            systemImage: settings.mapDisplayStyle == style
+                                ? "checkmark.circle.fill"
+                                : style.systemImage
+                        )
+                    }
+                }
+            } label: {
+                mapControlIcon(settings.mapDisplayStyle.systemImage)
+            }
+            .accessibilityLabel("Chọn kiểu bản đồ")
+
+            Button {
+                recenterRequest += 1
+            } label: {
+                mapControlIcon("location.fill")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Về vị trí hiện tại")
+
+            if let speed = navigationProvider.lastSpeedMetersPerSecond,
+               isActivelyNavigating {
+                VStack(spacing: 0) {
+                    Text("\(Int((speed * 3.6).rounded()))")
+                        .font(.headline.monospacedDigit())
+                    Text("km/h")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.primary)
+                .frame(width: 52, height: 52)
+                .background(.regularMaterial, in: Circle())
+                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                .accessibilityLabel("Tốc độ hiện tại \(Int((speed * 3.6).rounded())) ki-lô-mét một giờ")
+            }
+        }
+    }
+
+    private func mapControlIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(width: 52, height: 52)
+            .background(.regularMaterial, in: Circle())
+            .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
     }
 
     @ViewBuilder

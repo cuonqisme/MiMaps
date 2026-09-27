@@ -1,18 +1,45 @@
 import SwiftUI
+import UIKit
 
 struct DestinationSearchView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: DestinationSearchViewModel
     let onSelection: (Destination) -> Void
 
-    init(searchService: PlacesSearching, onSelection: @escaping (Destination) -> Void) {
-        _viewModel = StateObject(wrappedValue: DestinationSearchViewModel(searchService: searchService))
+    init(
+        searchService: PlacesSearching,
+        sharedLocationImporter: SharedLocationImporting? = nil,
+        onSelection: @escaping (Destination) -> Void
+    ) {
+        _viewModel = StateObject(
+            wrappedValue: DestinationSearchViewModel(
+                searchService: searchService,
+                sharedLocationImporter: sharedLocationImporter
+            )
+        )
         self.onSelection = onSelection
     }
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Button {
+                        Task {
+                            if let destination = await viewModel.importSharedLink(
+                                UIPasteboard.general.string ?? ""
+                            ) {
+                                onSelection(destination)
+                                dismiss()
+                            }
+                        }
+                    } label: {
+                        Label("Dán liên kết Google Maps", systemImage: "link.badge.plus")
+                    }
+                } footer: {
+                    Text("Trong Google Maps, chọn Chia sẻ → Sao chép liên kết, sau đó quay lại đây.")
+                }
+
                 if viewModel.isLoading {
                     HStack {
                         Spacer()

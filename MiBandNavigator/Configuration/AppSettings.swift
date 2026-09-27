@@ -8,6 +8,7 @@ final class AppSettings: ObservableObject {
         static let notificationSoundEnabled = "notificationSoundEnabled"
         static let developerModeEnabled = "developerModeEnabled"
         static let travelMode = "travelMode"
+        static let mapDisplayStyle = "mapDisplayStyle"
         static let farThresholdMeters = "farThresholdMeters"
         static let mediumThresholdMeters = "mediumThresholdMeters"
         static let nearThresholdMeters = "nearThresholdMeters"
@@ -30,6 +31,10 @@ final class AppSettings: ObservableObject {
 
     @Published var travelMode: TravelMode {
         didSet { defaults.set(travelMode.rawValue, forKey: Key.travelMode) }
+    }
+
+    @Published var mapDisplayStyle: MapDisplayStyle {
+        didSet { defaults.set(mapDisplayStyle.rawValue, forKey: Key.mapDisplayStyle) }
     }
 
     @Published var farThresholdMeters: Int {
@@ -58,6 +63,9 @@ final class AppSettings: ObservableObject {
         notificationSoundEnabled = defaults.object(forKey: Key.notificationSoundEnabled) as? Bool ?? false
         developerModeEnabled = defaults.object(forKey: Key.developerModeEnabled) as? Bool ?? false
         travelMode = TravelMode(rawValue: defaults.string(forKey: Key.travelMode) ?? "") ?? .motorcycle
+        mapDisplayStyle = MapDisplayStyle(
+            rawValue: defaults.string(forKey: Key.mapDisplayStyle) ?? ""
+        ) ?? .standard
         farThresholdMeters = Self.storedPositiveInt(
             defaults: defaults,
             key: Key.farThresholdMeters,

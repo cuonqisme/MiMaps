@@ -72,6 +72,47 @@ final class FormatterTests: XCTestCase {
             "● Đã đến nơi"
         )
     }
+
+    func testBandFormatterIncludesCurrentSpeed() {
+        let instruction = NavigationInstruction(
+            maneuver: .right,
+            roadName: "Trần Phú",
+            distanceToManeuverMeters: 200,
+            remainingDistanceMeters: 2_000,
+            remainingTimeSeconds: 300,
+            stepIdentifier: "speed",
+            currentSpeedKPH: 41.6
+        )
+
+        XCTAssertEqual(
+            BandNotificationFormatter().format(instruction).body,
+            "Trần Phú • Tốc độ 42 km/h"
+        )
+    }
+
+    func testBandFormatterFormatsSafetyCameraAlert() {
+        let instruction = NavigationInstruction(
+            maneuver: .straight,
+            roadName: nil,
+            distanceToManeuverMeters: 0,
+            remainingDistanceMeters: 2_000,
+            remainingTimeSeconds: 300,
+            stepIdentifier: "camera",
+            currentSpeedKPH: 55,
+            speedLimitKPH: 60,
+            safetyAlert: NavigationSafetyAlert(
+                identifier: "camera-1",
+                kind: .fixedSpeedCamera,
+                distanceMeters: 450,
+                speedLimitKPH: 60
+            )
+        )
+
+        let content = BandNotificationFormatter().format(instruction)
+
+        XCTAssertEqual(content.title, "● Camera tốc độ 450 m")
+        XCTAssertEqual(content.body, "Giới hạn 60 km/h • Đang đi 55 km/h")
+    }
 }
 
 private func makeInstruction(
