@@ -5,6 +5,7 @@ struct AppleManeuverClassifier: Sendable {
         let value = instruction
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "vi_VN"))
             .lowercased()
+            .replacingOccurrences(of: "đ", with: "d")
 
         if contains(value, any: ["u-turn", "u turn", "quay dau"]) {
             return contains(value, any: ["right", "phai"]) ? .uTurnRight : .uTurnLeft
