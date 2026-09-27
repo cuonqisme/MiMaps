@@ -342,8 +342,7 @@ struct MapScreen: View {
             nearbyError = nil
             return
         }
-        guard let center = currentUserCoordinate else {
-            nearbyError = "Chưa xác định được vị trí hiện tại. Hãy cho phép vị trí và thử lại."
+        guard let center = await searchCenterForNearbyPlaces() else {
             return
         }
         selectedNearbyCategory = category
@@ -361,6 +360,27 @@ struct MapScreen: View {
             nearbyDestinations = []
             nearbyError = error.localizedDescription
         }
+    }
+
+    private func searchCenterForNearbyPlaces() async -> CLLocationCoordinate2D? {
+        if let currentUserCoordinate { return currentUserCoordinate }
+
+        let permission = await locationPermissionManager.requestWhenInUse()
+        guard permission.isAuthorized else {
+            nearbyError = "Cần quyền vị trí để tìm địa điểm xung quanh. Trạng thái: \(permission.localizedDescription)."
+            shouldOfferSettings = true
+            return nil
+        }
+
+        shouldOfferSettings = false
+        recenterRequest += 1
+        for _ in 0..<12 {
+            if let currentUserCoordinate { return currentUserCoordinate }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+
+        nearbyError = "Chưa nhận được vị trí GPS. Hãy ra nơi thoáng, bấm nút định vị rồi thử lại."
+        return nil
     }
 
     private func selectDestination(_ destination: Destination) {

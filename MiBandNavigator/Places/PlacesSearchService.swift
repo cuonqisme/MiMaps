@@ -57,13 +57,9 @@ final class ApplePlacesSearchService: PlacesSearching {
     ) async throws -> [Destination] {
         guard CLLocationCoordinate2DIsValid(center) else { return [] }
         activeSearch?.cancel()
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = category.searchQuery
-        request.resultTypes = .pointOfInterest
-        request.region = MKCoordinateRegion(
-            center: center,
-            latitudinalMeters: 15_000,
-            longitudinalMeters: 15_000
+        let request = MKLocalPointsOfInterestRequest(center: center, radius: 15_000)
+        request.pointOfInterestFilter = MKPointOfInterestFilter(
+            including: category.pointOfInterestCategories
         )
         let search = MKLocalSearch(request: request)
         activeSearch = search
@@ -174,6 +170,21 @@ final class ApplePlacesSearchService: PlacesSearching {
                 ?? item.address?.fullAddress
         } else {
             return item.placemark.title
+        }
+    }
+}
+
+private extension NearbyPlaceCategory {
+    var pointOfInterestCategories: [MKPointOfInterestCategory] {
+        switch self {
+        case .food: [.restaurant, .foodMarket, .bakery]
+        case .fuel: [.gasStation]
+        case .parking: [.parking]
+        case .hospital: [.hospital]
+        case .pharmacy: [.pharmacy]
+        case .atm: [.atm, .bank]
+        case .coffee: [.cafe]
+        case .hotel: [.hotel]
         }
     }
 }
