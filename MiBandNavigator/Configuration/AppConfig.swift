@@ -19,6 +19,10 @@ enum GoogleAPIKeyValidator {
 }
 
 enum AppConfig {
+    static let googleMapsSDKVersion = "11.2.0"
+    static let googleNavigationSDKVersion = "11.2.0"
+    static let googlePlacesSDKVersion = "11.1.0"
+
     static var googleMapsAPIKey: String? {
         GoogleAPIKeyValidator.normalizedKey(
             Bundle.main.object(forInfoDictionaryKey: "GOOGLE_MAPS_API_KEY")
@@ -29,4 +33,3 @@ enum AppConfig {
         googleMapsAPIKey == nil ? .missing : .configured
     }
 }
-

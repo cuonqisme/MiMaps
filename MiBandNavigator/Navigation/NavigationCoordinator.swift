@@ -7,6 +7,7 @@ final class NavigationCoordinator: ObservableObject {
     @Published private(set) var currentInstruction: NavigationInstruction?
     @Published private(set) var lastBandNotification: NavigationInstruction?
     @Published private(set) var firedThresholds: Set<Int> = []
+    @Published private(set) var configuredThresholds: [Int]
     @Published private(set) var lastError: String?
 
     let provider: NavigationProvider
@@ -15,15 +16,19 @@ final class NavigationCoordinator: ObservableObject {
     private var stateTask: Task<Void, Never>?
     private var instructionTask: Task<Void, Never>?
     private var isInitialized = false
+    private let notificationThresholdProvider: (@MainActor () -> [Int])?
 
     init(
         provider: NavigationProvider,
         bandTransport: BandTransport,
-        notificationPolicy: BandNotificationPolicy = BandNotificationPolicy()
+        notificationPolicy: BandNotificationPolicy = BandNotificationPolicy(),
+        notificationThresholdProvider: (@MainActor () -> [Int])? = nil
     ) {
         self.provider = provider
         self.bandTransport = bandTransport
         self.notificationPolicy = notificationPolicy
+        configuredThresholds = notificationPolicy.thresholds
+        self.notificationThresholdProvider = notificationThresholdProvider
         connectStreams()
     }
 
@@ -42,6 +47,13 @@ final class NavigationCoordinator: ObservableObject {
     func calculateRoute(to destination: Destination, travelMode: TravelMode) async {
         await initialize()
         do {
+            if let notificationThresholdProvider {
+                notificationPolicy = BandNotificationPolicy(
+                    thresholds: notificationThresholdProvider(),
+                    cooldownSeconds: notificationPolicy.cooldownSeconds
+                )
+                configuredThresholds = notificationPolicy.thresholds
+            }
             notificationPolicy.reset()
             firedThresholds = []
             try await provider.calculateRoute(to: destination, travelMode: travelMode)
@@ -89,6 +101,7 @@ final class NavigationCoordinator: ObservableObject {
             for await state in states {
                 guard !Task.isCancelled else { return }
                 self?.state = state
+                AppLogger.navigation.info("Navigation state changed: \(String(describing: state), privacy: .public)")
             }
         }
 
@@ -111,6 +124,7 @@ final class NavigationCoordinator: ObservableObject {
             try await bandTransport.send(notification)
             lastBandNotification = notification
             lastError = nil
+            AppLogger.band.info("Wearable notification delivered for a policy-approved threshold")
         } catch {
             report(error, updateNavigationState: false)
         }
@@ -118,6 +132,7 @@ final class NavigationCoordinator: ObservableObject {
 
     private func report(_ error: Error, updateNavigationState: Bool = true) {
         lastError = error.localizedDescription
+        AppLogger.error.error("Navigation pipeline error: \(error.localizedDescription, privacy: .private)")
         if updateNavigationState {
             state = .error(error.localizedDescription)
         }

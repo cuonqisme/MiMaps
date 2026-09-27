@@ -48,6 +48,13 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
     @Published private(set) var routeRevision = 0
     @Published private(set) var backgroundUpdatesActive = false
     @Published private(set) var lastLocationUpdateAt: Date?
+    @Published private(set) var lastLatitude: Double?
+    @Published private(set) var lastLongitude: Double?
+    @Published private(set) var lastSpeedMetersPerSecond: Double?
+    @Published private(set) var lastCourseDegrees: Double?
+    @Published private(set) var lastRawManeuverValue: UInt?
+    @Published private(set) var routeChangeCount = 0
+    @Published private(set) var rerouteCount = 0
 
     private let stateEvents = NavigationEventStream<NavigationState>()
     private let instructionEvents = NavigationEventStream<NavigationInstruction>()
@@ -97,6 +104,10 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         requestedTravelMode = travelMode
         activeTravelMode = travelMode
         fallbackUsed = false
+        routeChangeCount = 0
+        rerouteCount = 0
+        lastRawManeuverValue = nil
+        AppLogger.google.info("Requesting route for mode: \(travelMode.rawValue, privacy: .public)")
         mapView.travelMode = googleTravelMode(for: travelMode)
 
         var status = await requestRoute(navigator: navigator, waypoint: waypoint)
@@ -106,6 +117,7 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         ) {
             fallbackUsed = true
             activeTravelMode = .car
+            AppLogger.google.notice("Two-wheeler route unsupported; retrying with driving mode")
             mapView.travelMode = .driving
             status = await requestRoute(navigator: navigator, waypoint: waypoint)
         }
@@ -116,6 +128,7 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         }
 
         routeIsCalculated = true
+        AppLogger.google.info("Google route calculation completed")
         transition(to: .routePreview)
     }
 
@@ -129,6 +142,7 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         startBackgroundLocationUpdates()
         mapView.cameraMode = .following
         transition(to: .navigating)
+        AppLogger.navigation.info("Google guidance started")
     }
 
     func stopNavigation() {
@@ -136,7 +150,9 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         stopBackgroundLocationUpdates()
         navigator?.clearDestinations()
         routeIsCalculated = false
+        clearCurrentLocationSnapshot()
         transition(to: .stopped)
+        AppLogger.navigation.info("Google guidance stopped")
     }
 
     func stateStream() -> AsyncStream<NavigationState> {
@@ -166,6 +182,7 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         }
 
         guard navInfo.navState == .enroute, let step = navInfo.currentStep else { return }
+        lastRawManeuverValue = step.maneuver.rawValue
         let snapshot = GoogleNavigationFeedSnapshot(
             maneuverRawValue: step.maneuver.rawValue,
             roundaboutTurnNumber: step.roundaboutTurnNumber,
@@ -181,7 +198,10 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
 
     func navigatorDidChangeRoute(_ navigator: GMSNavigator) {
         routeRevision += 1
+        routeChangeCount += 1
+        AppLogger.navigation.notice("Google route changed")
         if currentState == .navigating || currentState == .rerouting {
+            rerouteCount += 1
             transition(to: .rerouting)
         }
     }
@@ -190,6 +210,7 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         navigator.isGuidanceActive = false
         stopBackgroundLocationUpdates()
         routeIsCalculated = false
+        clearCurrentLocationSnapshot()
         emit(
             NavigationInstruction(
                 maneuver: .destination,
@@ -202,6 +223,7 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
             )
         )
         transition(to: .arrived)
+        AppLogger.navigation.info("Google guidance reported arrival")
     }
 
     func locationProvider(
@@ -210,6 +232,10 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
     ) {
         _ = locationProvider
         lastLocationUpdateAt = location.timestamp
+        lastLatitude = location.coordinate.latitude
+        lastLongitude = location.coordinate.longitude
+        lastSpeedMetersPerSecond = location.speed >= 0 ? location.speed : nil
+        lastCourseDegrees = location.course >= 0 ? location.course : nil
     }
 
     private func configureNavigation(on mapView: GMSMapView) {
@@ -317,5 +343,13 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         roadSnappedLocationProvider.allowsBackgroundLocationUpdates = false
         _ = roadSnappedLocationProvider.remove(self)
         backgroundUpdatesActive = false
+    }
+
+    private func clearCurrentLocationSnapshot() {
+        lastLocationUpdateAt = nil
+        lastLatitude = nil
+        lastLongitude = nil
+        lastSpeedMetersPerSecond = nil
+        lastCourseDegrees = nil
     }
 }

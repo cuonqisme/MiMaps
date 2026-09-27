@@ -34,6 +34,36 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Khoảng cách cảnh báo") {
+                Stepper(
+                    "Xa: \(settings.farThresholdMeters) m",
+                    value: $settings.farThresholdMeters,
+                    in: 250...2_000,
+                    step: 50
+                )
+                Stepper(
+                    "Trung bình: \(settings.mediumThresholdMeters) m",
+                    value: $settings.mediumThresholdMeters,
+                    in: 100...1_000,
+                    step: 50
+                )
+                Stepper(
+                    "Gần: \(settings.nearThresholdMeters) m",
+                    value: $settings.nearThresholdMeters,
+                    in: 40...300,
+                    step: 10
+                )
+                Stepper(
+                    "Ngay lập tức: \(settings.immediateThresholdMeters) m",
+                    value: $settings.immediateThresholdMeters,
+                    in: 10...100,
+                    step: 5
+                )
+                Text("Đơn vị: mét. Giá trị được áp dụng khi tạo tuyến tiếp theo.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Vị trí và màn hình khóa") {
                 LabeledContent("Quyền vị trí", value: locationPermissionManager.status.localizedDescription)
                 Button("Cho phép vị trí nền") {

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="MiBand Navigator"
+     xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>Hanoi sample city route</name>
+    <desc>Synthetic route for Xcode simulator testing; not a road-test instruction.</desc>
+  </metadata>
+  <trk>
+    <name>Trần Phú to Lê Thánh Tông</name>
+    <trkseg>
+      <trkpt lat="21.028511" lon="105.835825"><ele>15</ele><time>2026-01-01T00:00:00Z</time></trkpt>
+      <trkpt lat="21.027914" lon="105.838278"><ele>15</ele><time>2026-01-01T00:00:20Z</time></trkpt>
+      <trkpt lat="21.026933" lon="105.841541"><ele>15</ele><time>2026-01-01T00:00:40Z</time></trkpt>
+      <trkpt lat="21.025676" lon="105.845470"><ele>14</ele><time>2026-01-01T00:01:00Z</time></trkpt>
+      <trkpt lat="21.024160" lon="105.849150"><ele>14</ele><time>2026-01-01T00:01:20Z</time></trkpt>
+      <trkpt lat="21.022972" lon="105.853174"><ele>13</ele><time>2026-01-01T00:01:40Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

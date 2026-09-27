@@ -53,6 +53,26 @@ final class NavigationCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.lastError, TestBandError.failed.localizedDescription)
     }
 
+    func testConfigurableThresholdsAreAppliedWhenRouteStarts() async {
+        let provider = MockNavigationProvider(automaticSimulationEnabled: false)
+        let transport = BandTransportSpy()
+        let coordinator = NavigationCoordinator(
+            provider: provider,
+            bandTransport: transport,
+            notificationPolicy: BandNotificationPolicy(cooldownSeconds: 0),
+            notificationThresholdProvider: { [400] }
+        )
+
+        await coordinator.startMockRoute()
+        XCTAssertEqual(coordinator.configuredThresholds, [400])
+        XCTAssertTrue(transport.instructions.isEmpty)
+
+        provider.advance(by: 110)
+        await waitUntil { transport.instructions.count == 1 }
+
+        XCTAssertEqual(transport.instructions.first?.distanceToManeuverMeters, 400)
+    }
+
     private func waitUntil(
         timeoutIterations: Int = 100,
         condition: @escaping @MainActor () -> Bool

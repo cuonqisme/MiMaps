@@ -6,4 +6,6 @@ Google Maps Platform SDKs communicate with Google under Google's terms and priva
 
 Background road-snapped location updates start only after the user starts guidance and stop on arrival or STOP. Permission status can be reviewed in the app and changed in iOS Settings. See `docs/BACKGROUND_BEHAVIOR.md` for operational details.
 
+The debug screen keeps only the latest location snapshot in memory while guidance is active and clears it on stop or arrival. Structured production logs report state and errors without logging coordinates or a route history.
+
 The application privacy manifest declares its use of app-scoped `UserDefaults` for user preferences (`CA92.1`). Third-party SDK privacy declarations remain the responsibility of their respective SDK bundles, as required by Apple.

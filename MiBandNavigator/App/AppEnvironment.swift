@@ -46,11 +46,13 @@ final class AppEnvironment: ObservableObject {
         )
         navigationCoordinator = NavigationCoordinator(
             provider: mockNavigationProvider,
-            bandTransport: bandTransport
+            bandTransport: bandTransport,
+            notificationThresholdProvider: { settings.notificationThresholds }
         )
         googleNavigationCoordinator = NavigationCoordinator(
             provider: googleNavigationProvider,
-            bandTransport: googleBandTransport
+            bandTransport: googleBandTransport,
+            notificationThresholdProvider: { settings.notificationThresholds }
         )
     }
 }

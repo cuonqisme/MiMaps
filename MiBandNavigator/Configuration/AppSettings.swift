@@ -8,6 +8,10 @@ final class AppSettings: ObservableObject {
         static let notificationSoundEnabled = "notificationSoundEnabled"
         static let developerModeEnabled = "developerModeEnabled"
         static let travelMode = "travelMode"
+        static let farThresholdMeters = "farThresholdMeters"
+        static let mediumThresholdMeters = "mediumThresholdMeters"
+        static let nearThresholdMeters = "nearThresholdMeters"
+        static let immediateThresholdMeters = "immediateThresholdMeters"
     }
 
     private let defaults: UserDefaults
@@ -28,11 +32,62 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(travelMode.rawValue, forKey: Key.travelMode) }
     }
 
+    @Published var farThresholdMeters: Int {
+        didSet { defaults.set(farThresholdMeters, forKey: Key.farThresholdMeters) }
+    }
+
+    @Published var mediumThresholdMeters: Int {
+        didSet { defaults.set(mediumThresholdMeters, forKey: Key.mediumThresholdMeters) }
+    }
+
+    @Published var nearThresholdMeters: Int {
+        didSet { defaults.set(nearThresholdMeters, forKey: Key.nearThresholdMeters) }
+    }
+
+    @Published var immediateThresholdMeters: Int {
+        didSet { defaults.set(immediateThresholdMeters, forKey: Key.immediateThresholdMeters) }
+    }
+
+    var notificationThresholds: [Int] {
+        [farThresholdMeters, mediumThresholdMeters, nearThresholdMeters, immediateThresholdMeters]
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         bandNotificationsEnabled = defaults.object(forKey: Key.bandNotificationsEnabled) as? Bool ?? true
         notificationSoundEnabled = defaults.object(forKey: Key.notificationSoundEnabled) as? Bool ?? false
         developerModeEnabled = defaults.object(forKey: Key.developerModeEnabled) as? Bool ?? false
         travelMode = TravelMode(rawValue: defaults.string(forKey: Key.travelMode) ?? "") ?? .motorcycle
+        farThresholdMeters = Self.storedPositiveInt(
+            defaults: defaults,
+            key: Key.farThresholdMeters,
+            fallback: 500
+        )
+        mediumThresholdMeters = Self.storedPositiveInt(
+            defaults: defaults,
+            key: Key.mediumThresholdMeters,
+            fallback: 200
+        )
+        nearThresholdMeters = Self.storedPositiveInt(
+            defaults: defaults,
+            key: Key.nearThresholdMeters,
+            fallback: 80
+        )
+        immediateThresholdMeters = Self.storedPositiveInt(
+            defaults: defaults,
+            key: Key.immediateThresholdMeters,
+            fallback: 30
+        )
+    }
+
+    private static func storedPositiveInt(
+        defaults: UserDefaults,
+        key: String,
+        fallback: Int
+    ) -> Int {
+        guard let stored = defaults.object(forKey: key) as? NSNumber, stored.intValue > 0 else {
+            return fallback
+        }
+        return stored.intValue
     }
 }

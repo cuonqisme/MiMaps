@@ -74,6 +74,7 @@ final class LocalNotificationService: LocalNotificationScheduling {
             trigger: nil
         )
         try await center.add(request)
+        AppLogger.notification.info("Local navigation notification scheduled")
     }
 }
 

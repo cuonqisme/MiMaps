@@ -9,9 +9,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @MainActor UNUserNotif
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        AppLogger.app.info("Application launched")
         if let apiKey = AppConfig.googleMapsAPIKey {
             GMSServices.provideAPIKey(apiKey)
             _ = PlacesClient.provideAPIKey(apiKey)
+            AppLogger.google.info("Google Maps Platform API key configured")
+        } else {
+            AppLogger.google.warning("Google Maps Platform API key is missing")
         }
 
         let category = UNNotificationCategory(

@@ -71,8 +71,10 @@ struct DeveloperToolsView: View {
 
                 NavigationLink("Mở bảng gỡ lỗi") {
                     NavigationDebugView(
-                        coordinator: coordinator,
-                        mockProvider: mockProvider,
+                        coordinator: googleCoordinator,
+                        googleProvider: googleProvider,
+                        locationPermissionManager: environment.locationPermissionManager,
+                        settings: settings,
                         permissionManager: viewModel.permissionManagerForDebug
                     )
                 }
