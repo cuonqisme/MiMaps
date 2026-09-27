@@ -37,7 +37,7 @@ struct BandNotificationPolicy: Sendable {
         let isNewStep = currentStepIdentifier != instruction.stepIdentifier
         if isNewStep {
             currentStepIdentifier = instruction.stepIdentifier
-            previousDistanceMeters = instruction.distanceToManeuverMeters.nextUp
+            previousDistanceMeters = .infinity
             firedThresholds.removeAll(keepingCapacity: true)
             pendingThresholds.removeAll(keepingCapacity: true)
             arrivalSent = false

@@ -82,6 +82,18 @@ final class BandNotificationPolicyTests: XCTestCase {
         XCTAssertEqual(policy.firedThresholds, [500])
     }
 
+    func testFirstLiveUpdateUsesNearestApplicableThreshold() {
+        var policy = BandNotificationPolicy()
+
+        let at450 = policy.evaluate(instruction(distance: 450, step: "one", time: 0))
+        let at150 = policy.evaluate(instruction(distance: 150, step: "two", time: 1))
+
+        XCTAssertEqual(at450.notification?.distanceToManeuverMeters, 500)
+        XCTAssertEqual(at450.crossedThresholds, [500])
+        XCTAssertEqual(at150.notification?.distanceToManeuverMeters, 200)
+        XCTAssertEqual(at150.crossedThresholds, [500, 200])
+    }
+
     func testArrivalIsSentOnlyOnce() {
         var policy = BandNotificationPolicy()
         let arrival = instruction(distance: 0, maneuver: .destination, time: 1)
@@ -107,4 +119,3 @@ final class BandNotificationPolicyTests: XCTestCase {
         )
     }
 }
-

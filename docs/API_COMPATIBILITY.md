@@ -17,6 +17,8 @@ Route calculation requests two-wheeler mode for motorcycle navigation. It falls 
 
 The wearable data feed uses `GMSNavigatorListener.navigator(_:didUpdate:)` with `GMSNavigationNavInfo`. It maps `currentStep`, `distanceToCurrentStepMeters`, `distanceToFinalDestinationMeters`, `timeToFinalDestinationSeconds`, arrival callbacks, and navigation state into provider-neutral models. Current SDK listeners are registered with `add(_:)`/`remove(_:)`; the retired delegate API is not used.
 
+Live instructions and mock instructions use the same `NavigationCoordinator`, threshold/cooldown policy, deduplicator, and `NotificationBandTransport`. This pipeline has an integration test with a controllable provider and notification scheduler; real Mi Fitness and band mirroring remain a physical-device verification item.
+
 ## Official references
 
 - Apple Xcode 26 release notes: https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes
