@@ -37,7 +37,7 @@ final class MockNavigationProvider: ObservableObject, NavigationProvider {
     private var simulationTask: Task<Void, Never>?
 
     init(
-        baseSpeedMetersPerSecond: Double = 100,
+        baseSpeedMetersPerSecond: Double = 12,
         automaticSimulationEnabled: Bool = true
     ) {
         self.baseSpeedMetersPerSecond = max(1, baseSpeedMetersPerSecond)
@@ -87,11 +87,15 @@ final class MockNavigationProvider: ObservableObject, NavigationProvider {
     }
 
     func speedUp() {
+        guard currentState == .navigating else { return }
         speedMultiplier = min(8, speedMultiplier * 2)
+        emitCurrentInstruction()
     }
 
     func slowDown() {
+        guard currentState == .navigating else { return }
         speedMultiplier = max(0.25, speedMultiplier / 2)
+        emitCurrentInstruction()
     }
 
     func nextManeuver() {
@@ -207,4 +211,3 @@ final class MockNavigationProvider: ObservableObject, NavigationProvider {
         Leg(identifier: "mock-final-leg", maneuver: .straight, roadName: "Điểm đến", distanceMeters: 700)
     ]
 }
-

@@ -35,6 +35,28 @@ final class NavigationCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(provider.currentState, .stopped)
         XCTAssertEqual(transport.stopCount, 1)
+        XCTAssertNil(coordinator.currentInstruction)
+        XCTAssertNil(coordinator.lastBandNotification)
+    }
+
+    func testRoutePreviewDoesNotSendBandNotificationUntilNavigationStarts() async throws {
+        let provider = MockNavigationProvider(automaticSimulationEnabled: false)
+        let transport = BandTransportSpy()
+        let coordinator = NavigationCoordinator(
+            provider: provider,
+            bandTransport: transport,
+            notificationPolicy: BandNotificationPolicy(cooldownSeconds: 0)
+        )
+        let destination = Destination(displayName: "Test", latitude: 21, longitude: 105)
+
+        await coordinator.calculateRoute(to: destination, travelMode: .car)
+        XCTAssertEqual(provider.currentState, .routePreview)
+        XCTAssertTrue(transport.instructions.isEmpty)
+
+        await coordinator.startNavigation()
+        await waitUntil { transport.instructions.count == 1 }
+
+        XCTAssertEqual(transport.instructions.first?.maneuver, .right)
     }
 
     func testBandDeliveryFailureDoesNotStopNavigationState() async {

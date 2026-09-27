@@ -49,6 +49,7 @@ struct DeveloperToolsView: View {
             Section("Mock Navigation") {
                 LabeledContent("Trạng thái", value: String(describing: coordinator.state))
                 LabeledContent("Tốc độ", value: String(format: "%.2gx", mockProvider.speedMultiplier))
+                LabeledContent("Mô phỏng", value: mockProvider.isPaused ? "Đang tạm dừng" : "Đang chạy")
 
                 Button("BẮT ĐẦU TUYẾN MÔ PHỎNG") {
                     Task { await coordinator.startMockRoute() }
@@ -57,13 +58,22 @@ struct DeveloperToolsView: View {
 
                 HStack {
                     Button("Tạm dừng") { mockProvider.pause() }
+                        .buttonStyle(.borderless)
+                        .disabled(mockProvider.currentState != .navigating || mockProvider.isPaused)
                     Button("Tiếp tục") { mockProvider.resume() }
+                        .buttonStyle(.borderless)
+                        .disabled(mockProvider.currentState != .navigating || !mockProvider.isPaused)
                 }
                 HStack {
                     Button("Nhanh hơn") { mockProvider.speedUp() }
+                        .buttonStyle(.borderless)
+                        .disabled(mockProvider.currentState != .navigating || mockProvider.speedMultiplier >= 8)
                     Button("Chậm hơn") { mockProvider.slowDown() }
+                        .buttonStyle(.borderless)
+                        .disabled(mockProvider.currentState != .navigating || mockProvider.speedMultiplier <= 0.25)
                 }
                 Button("Chuyển chặng tiếp theo") { mockProvider.nextManeuver() }
+                    .disabled(mockProvider.currentState != .navigating)
                 Button("Đặt lại", role: .destructive) { mockProvider.reset() }
 
                 if let instruction = coordinator.currentInstruction {

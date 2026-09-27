@@ -25,10 +25,12 @@ final class MockNavigationProviderTests: XCTestCase {
         try await provider.startNavigation()
 
         provider.pause()
+        XCTAssertTrue(provider.isPaused)
         provider.advance(by: 100)
         XCTAssertEqual(provider.currentInstruction?.distanceToManeuverMeters, 500)
 
         provider.resume()
+        XCTAssertFalse(provider.isPaused)
         provider.speedUp()
         provider.advance(by: 100)
         XCTAssertEqual(provider.speedMultiplier, 2)
@@ -69,4 +71,3 @@ final class MockNavigationProviderTests: XCTestCase {
         Destination(displayName: "Test", latitude: 21, longitude: 105)
     }
 }
-

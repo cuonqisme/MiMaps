@@ -16,6 +16,7 @@ final class NavigationCoordinator: ObservableObject {
     private var stateTask: Task<Void, Never>?
     private var instructionTask: Task<Void, Never>?
     private var isInitialized = false
+    private var notificationsActive = false
     private let notificationThresholdProvider: (@MainActor () -> [Int])?
 
     init(
@@ -45,6 +46,7 @@ final class NavigationCoordinator: ObservableObject {
     }
 
     func calculateRoute(to destination: Destination, travelMode: TravelMode) async {
+        notificationsActive = false
         await initialize()
         do {
             if let notificationThresholdProvider {
@@ -56,6 +58,7 @@ final class NavigationCoordinator: ObservableObject {
             }
             notificationPolicy.reset()
             firedThresholds = []
+            lastBandNotification = nil
             try await provider.calculateRoute(to: destination, travelMode: travelMode)
             lastError = nil
         } catch {
@@ -64,10 +67,12 @@ final class NavigationCoordinator: ObservableObject {
     }
 
     func startNavigation() async {
+        notificationsActive = true
         do {
             try await provider.startNavigation()
             lastError = nil
         } catch {
+            notificationsActive = false
             report(error)
         }
     }
@@ -85,11 +90,14 @@ final class NavigationCoordinator: ObservableObject {
     }
 
     func stopNavigation() {
+        notificationsActive = false
         provider.stopNavigation()
         bandTransport.stop()
         isInitialized = false
         notificationPolicy.reset()
         firedThresholds = []
+        currentInstruction = nil
+        lastBandNotification = nil
     }
 
     private func connectStreams() {
@@ -116,6 +124,7 @@ final class NavigationCoordinator: ObservableObject {
 
     private func process(_ instruction: NavigationInstruction) async {
         currentInstruction = instruction
+        guard notificationsActive else { return }
         let decision = notificationPolicy.evaluate(instruction)
         firedThresholds = notificationPolicy.firedThresholds
         guard let notification = decision.notification else { return }

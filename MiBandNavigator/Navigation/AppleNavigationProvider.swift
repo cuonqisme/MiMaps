@@ -121,8 +121,10 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         routeDistance = 0
         routeTravelTime = 0
         currentInstruction = nil
+        lastInstructionText = nil
         currentStepIndex = 0
         offRouteUpdateCount = 0
+        routeRevision += 1
         transition(to: .stopped)
     }
 
