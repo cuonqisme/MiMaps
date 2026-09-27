@@ -1,6 +1,6 @@
 # Xcode
 DerivedData/
-build/
+/build/
 *.xcuserstate
 xcuserdata/
 *.xccheckout
@@ -33,4 +33,3 @@ test-results/
 .DS_Store
 Thumbs.db
 .vscode/
-

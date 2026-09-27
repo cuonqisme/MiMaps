@@ -52,6 +52,9 @@ struct SettingsView: View {
             Section("Giới thiệu") {
                 LabeledContent("Phiên bản", value: appVersion)
                 LabeledContent("Bản dựng", value: buildNumber)
+                NavigationLink("Pháp lý và quyền riêng tư") {
+                    LegalView()
+                }
                 Text("MiBand Navigator không kết nối BLE riêng với Xiaomi Smart Band. Thông báo được chuyển tiếp bởi iOS và Mi Fitness.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

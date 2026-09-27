@@ -2,16 +2,100 @@ name: iOS Release
 
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
+    inputs:
+      signed:
+        description: Build and export a signed IPA using configured secrets
+        required: true
+        type: boolean
+        default: false
+      export_method:
+        description: Xcode distribution method
+        required: true
+        type: choice
+        default: app-store-connect
+        options:
+          - app-store-connect
+          - release-testing
+          - debugging
 
 permissions:
   contents: read
 
 jobs:
-  release-placeholder:
+  release:
     runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      BUILD_NUMBER: ${{ github.run_number }}
+      MARKETING_VERSION: 0.1.0
+      ARCHIVE_PATH: artifacts/release/MiBandNavigator.xcarchive
+      EXPORT_PATH: artifacts/release/export
+      EXPORT_METHOD: ${{ inputs.export_method }}
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+
     steps:
       - uses: actions/checkout@v4
-      - run: echo "Signed archive and IPA export are enabled in Milestone 10."
 
+      - name: Toolchain information
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Configure Google Maps API key when available
+        shell: bash
+        run: |
+          if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
+            printf 'GOOGLE_MAPS_API_KEY = %s\n' "${GOOGLE_MAPS_API_KEY}" > Configuration/Secrets.xcconfig
+          fi
+
+      - name: Generate Xcode project
+        run: bash scripts/ci/bootstrap.sh
+
+      - name: Run unit tests
+        run: bash scripts/ci/test.sh
+
+      - name: Install signing assets
+        if: inputs.signed == true
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: bash scripts/signing/install_signing_assets.sh
+
+      - name: Create unsigned validation archive
+        if: inputs.signed != true
+        run: bash scripts/build/archive.sh unsigned
+
+      - name: Create signed archive
+        if: inputs.signed == true
+        run: bash scripts/build/archive.sh signed
+
+      - name: Export signed IPA
+        if: inputs.signed == true
+        run: bash scripts/build/export_ipa.sh
+
+      - name: Generate release report
+        if: always()
+        env:
+          SIGNING_RESULT: ${{ inputs.signed && 'Manual certificate and provisioning profile' || 'Unsigned validation archive' }}
+        run: bash scripts/build/release_report.sh
+
+      - name: Upload release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiBandNavigator-release-${{ github.run_number }}
+          path: |
+            artifacts/release/
+            test-results/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove signing assets
+        if: always() && inputs.signed == true
+        run: bash scripts/signing/cleanup_signing_assets.sh

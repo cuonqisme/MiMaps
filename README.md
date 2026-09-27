@@ -4,7 +4,7 @@ MiBand Navigator is a SwiftUI iPhone application that owns a Google Navigation S
 
 ## Current status
 
-The repository is being delivered milestone by milestone. Simulator builds and tests run on GitHub-hosted macOS because the primary development environment is Windows.
+Simulator builds and tests run on GitHub-hosted macOS because the primary development environment is Windows. The release workflow always supports an unsigned archive validation and produces a signed IPA when Apple signing secrets are configured.
 
 ## Windows quick start
 
@@ -22,6 +22,8 @@ Open the repository's **Actions** tab and inspect **iOS CI**. The workflow gener
 
 Never commit API keys or Apple signing material. Google Maps Platform setup, key restrictions, signed IPA, and TestFlight steps are documented as their implementation milestones land.
 
+Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Google Cloud](GOOGLE_CLOUD_SETUP.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [testing](TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
+
 ## Supported toolchain
 
 - Xcode 26.6 / Swift 6.2 on GitHub `macos-26`
@@ -38,4 +40,3 @@ open MiBandNavigator.xcodeproj
 ```
 
 The generated `.xcodeproj` is intentionally ignored; `project.yml` is the source of truth.
-
