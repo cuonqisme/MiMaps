@@ -137,7 +137,11 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     func selectRoute(at index: Int) {
         guard routeCandidates.indices.contains(index),
               let location = lastLocation else { return }
-        applyRoute(routeCandidates[index], index: index, from: location, isReroute: false)
+        do {
+            try applyRoute(routeCandidates[index], index: index, from: location, isReroute: false)
+        } catch {
+            transition(to: .error(error.localizedDescription))
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -203,7 +207,7 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         routeCandidates = response.routes
         routePolylines = response.routes.map(\.polyline)
         routeOptions = makeRouteSummaries(response.routes)
-        applyRoute(response.routes[0], index: 0, from: sourceLocation, isReroute: isReroute)
+        try applyRoute(response.routes[0], index: 0, from: sourceLocation, isReroute: isReroute)
     }
 
     private func applyRoute(
@@ -211,7 +215,7 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         index: Int,
         from sourceLocation: CLLocation,
         isReroute: Bool
-    ) {
+    ) throws {
         selectedRouteIndex = index
         routePolyline = route.polyline
         routeSteps = route.steps
