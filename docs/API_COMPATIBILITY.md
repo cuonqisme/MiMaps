@@ -15,6 +15,8 @@ Google integration uses Swift Package Manager only and will pin exact versions. 
 
 Route calculation requests two-wheeler mode for motorcycle navigation. It falls back to driving only when Navigation SDK explicitly returns `travelModeUnsupported`; all other route failures are surfaced to the user.
 
+The wearable data feed uses `GMSNavigatorListener.navigator(_:didUpdate:)` with `GMSNavigationNavInfo`. It maps `currentStep`, `distanceToCurrentStepMeters`, `distanceToFinalDestinationMeters`, `timeToFinalDestinationSeconds`, arrival callbacks, and navigation state into provider-neutral models. Current SDK listeners are registered with `add(_:)`/`remove(_:)`; the retired delegate API is not used.
+
 ## Official references
 
 - Apple Xcode 26 release notes: https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes

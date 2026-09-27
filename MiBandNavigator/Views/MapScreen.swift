@@ -23,19 +23,28 @@ struct MapScreen: View {
             mapContent
                 .ignoresSafeArea(edges: .bottom)
 
-            Button { isSearchPresented = true } label: {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                    Text("Tìm điểm đến…")
-                    Spacer()
+            Group {
+                if let instruction = googleCoordinator.currentInstruction,
+                   googleCoordinator.state == .navigating
+                    || googleCoordinator.state == .rerouting
+                    || googleCoordinator.state == .arrived {
+                    ManeuverCardView(instruction: instruction)
+                } else {
+                    Button { isSearchPresented = true } label: {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                            Text("Tìm điểm đến…")
+                            Spacer()
+                        }
+                        .foregroundStyle(.primary)
+                        .padding()
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                        .shadow(radius: 4, y: 2)
+                    }
+                    .accessibilityHint("Mở tìm kiếm địa điểm bằng Google Places")
                 }
-                .foregroundStyle(.primary)
-                .padding()
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .shadow(radius: 4, y: 2)
             }
             .padding()
-            .accessibilityHint("Mở tìm kiếm địa điểm bằng Google Places")
 
             if let selectedDestination {
                 VStack {
@@ -55,8 +64,8 @@ struct MapScreen: View {
                                 .font(.footnote)
                                 .foregroundStyle(.orange)
                         }
-                        if let routeError {
-                            Text(routeError)
+                        if let visibleError = routeError ?? googleCoordinator.lastError {
+                            Text(visibleError)
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                         }
@@ -71,7 +80,14 @@ struct MapScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isSearchPresented) {
             DestinationSearchView(searchService: environment.placesSearchService) { destination in
+                if selectedDestination?.id != destination.id,
+                   googleCoordinator.state == .routePreview
+                    || googleCoordinator.state == .navigating
+                    || googleCoordinator.state == .rerouting {
+                    googleCoordinator.stopNavigation()
+                }
                 selectedDestination = destination
+                routeError = nil
             }
         }
     }

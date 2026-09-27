@@ -37,7 +37,7 @@ enum TwoWheelerFallbackPolicy {
 }
 
 @MainActor
-final class GoogleNavigationProvider: ObservableObject, NavigationProvider {
+final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProvider, @MainActor GMSNavigatorListener {
     let providerName = "Google Navigation SDK"
 
     @Published private(set) var currentState: NavigationState = .idle
@@ -45,9 +45,11 @@ final class GoogleNavigationProvider: ObservableObject, NavigationProvider {
     @Published private(set) var requestedTravelMode: TravelMode = .motorcycle
     @Published private(set) var activeTravelMode: TravelMode = .motorcycle
     @Published private(set) var fallbackUsed = false
+    @Published private(set) var routeRevision = 0
 
     private let stateEvents = NavigationEventStream<NavigationState>()
     private let instructionEvents = NavigationEventStream<NavigationInstruction>()
+    private let instructionFactory = GoogleNavigationInstructionFactory()
     private weak var mapView: GMSMapView?
     private var navigator: GMSNavigator?
     private var routeIsCalculated = false
@@ -139,11 +141,76 @@ final class GoogleNavigationProvider: ObservableObject, NavigationProvider {
         instructionEvents.stream(initialValue: currentInstruction)
     }
 
+    func navigator(_ navigator: GMSNavigator, didUpdate navInfo: GMSNavigationNavInfo) {
+        switch navInfo.navState {
+        case .enroute:
+            if currentState != .arrived {
+                transition(to: .navigating)
+            }
+        case .rerouting:
+            transition(to: .rerouting)
+        case .stopped:
+            if currentState != .arrived && currentState != .stopped {
+                transition(to: .stopped)
+            }
+        case .unknown:
+            break
+        @unknown default:
+            break
+        }
+
+        guard navInfo.navState == .enroute, let step = navInfo.currentStep else { return }
+        let snapshot = GoogleNavigationFeedSnapshot(
+            maneuverRawValue: step.maneuver.rawValue,
+            roundaboutTurnNumber: step.roundaboutTurnNumber,
+            routeRevision: routeRevision,
+            stepNumber: step.stepNumber,
+            roadName: step.fullRoadName,
+            distanceToManeuverMeters: navInfo.distanceToCurrentStepMeters,
+            remainingDistanceMeters: navInfo.distanceToFinalDestinationMeters,
+            remainingTimeSeconds: navInfo.timeToFinalDestinationSeconds
+        )
+        emit(instructionFactory.makeInstruction(from: snapshot))
+    }
+
+    func navigatorDidChangeRoute(_ navigator: GMSNavigator) {
+        routeRevision += 1
+        if currentState == .navigating || currentState == .rerouting {
+            transition(to: .rerouting)
+        }
+    }
+
+    func navigator(_ navigator: GMSNavigator, didArriveAt waypoint: GMSNavigationWaypoint) {
+        navigator.isGuidanceActive = false
+        routeIsCalculated = false
+        emit(
+            NavigationInstruction(
+                maneuver: .destination,
+                roadName: waypoint.title,
+                distanceToManeuverMeters: 0,
+                remainingDistanceMeters: 0,
+                remainingTimeSeconds: 0,
+                stepIdentifier: "google-arrival-\(routeRevision)",
+                timestamp: Date()
+            )
+        )
+        transition(to: .arrived)
+    }
+
     private func configureNavigation(on mapView: GMSMapView) {
         mapView.isNavigationEnabled = true
         mapView.isMyLocationEnabled = true
         mapView.settings.myLocationButton = true
-        navigator = mapView.navigator
+        let newNavigator = mapView.navigator
+        if navigator !== newNavigator {
+            if let navigator {
+                _ = navigator.remove(self)
+            }
+            navigator = newNavigator
+            navigator?.add(self)
+            navigator?.distanceUpdateThreshold = 1
+            navigator?.timeUpdateThreshold = 1
+        }
     }
 
     private func makeWaypoint(from destination: Destination) -> GMSNavigationWaypoint? {
@@ -200,8 +267,13 @@ final class GoogleNavigationProvider: ObservableObject, NavigationProvider {
     }
 
     private func transition(to state: NavigationState) {
+        guard currentState != state else { return }
         currentState = state
         stateEvents.yield(state)
     }
-}
 
+    private func emit(_ instruction: NavigationInstruction) {
+        currentInstruction = instruction
+        instructionEvents.yield(instruction)
+    }
+}

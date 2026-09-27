@@ -5,12 +5,16 @@ struct DeveloperToolsView: View {
     @ObservedObject private var settings: AppSettings
     @ObservedObject private var coordinator: NavigationCoordinator
     @ObservedObject private var mockProvider: MockNavigationProvider
+    @ObservedObject private var googleCoordinator: NavigationCoordinator
+    @ObservedObject private var googleProvider: GoogleNavigationProvider
     @StateObject private var viewModel: DeveloperToolsViewModel
 
     init(environment: AppEnvironment) {
         _settings = ObservedObject(wrappedValue: environment.settings)
         _coordinator = ObservedObject(wrappedValue: environment.navigationCoordinator)
         _mockProvider = ObservedObject(wrappedValue: environment.mockNavigationProvider)
+        _googleCoordinator = ObservedObject(wrappedValue: environment.googleNavigationCoordinator)
+        _googleProvider = ObservedObject(wrappedValue: environment.googleNavigationProvider)
         _viewModel = StateObject(
             wrappedValue: DeveloperToolsViewModel(
                 permissionManager: environment.notificationPermissionManager,
@@ -22,6 +26,19 @@ struct DeveloperToolsView: View {
 
     var body: some View {
         Form {
+            Section("Google Navigation") {
+                LabeledContent("Trạng thái", value: String(describing: googleCoordinator.state))
+                LabeledContent("Yêu cầu", value: googleProvider.requestedTravelMode.localizedName)
+                LabeledContent("Đang dùng", value: googleProvider.activeTravelMode.localizedName)
+                LabeledContent("Fallback ô tô", value: googleProvider.fallbackUsed ? "Có" : "Không")
+                LabeledContent("Phiên bản tuyến", value: String(googleProvider.routeRevision))
+
+                if let instruction = googleCoordinator.currentInstruction {
+                    Text("\(BandNotificationFormatter().symbol(for: instruction.maneuver)) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters)) — \(instruction.roadName ?? "—")")
+                        .font(.headline)
+                }
+            }
+
             Section("Mock Navigation") {
                 LabeledContent("Trạng thái", value: String(describing: coordinator.state))
                 LabeledContent("Tốc độ", value: String(format: "%.2gx", mockProvider.speedMultiplier))
