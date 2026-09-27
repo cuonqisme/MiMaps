@@ -37,13 +37,13 @@ final class LocationPermissionManager: NSObject, ObservableObject, @MainActor CL
 
     override init() {
         manager = CLLocationManager()
-        status = Self.currentStatus
+        status = Self.currentStatus(for: manager)
         super.init()
         manager.delegate = self
     }
 
     func requestWhenInUse() async -> LocationPermissionStatus {
-        status = Self.currentStatus
+        status = Self.currentStatus(for: manager)
         guard status == .notDetermined else { return status }
 
         return await withCheckedContinuation { continuation in
@@ -53,15 +53,15 @@ final class LocationPermissionManager: NSObject, ObservableObject, @MainActor CL
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        status = Self.currentStatus
+        status = Self.currentStatus(for: manager)
         guard status != .notDetermined, let continuation else { return }
         self.continuation = nil
         continuation.resume(returning: status)
     }
 
-    private static var currentStatus: LocationPermissionStatus {
+    private static func currentStatus(for manager: CLLocationManager) -> LocationPermissionStatus {
         guard CLLocationManager.locationServicesEnabled() else { return .servicesDisabled }
-        return switch CLLocationManager.authorizationStatus() {
+        return switch manager.authorizationStatus {
         case .notDetermined: .notDetermined
         case .restricted: .restricted
         case .denied: .denied
