@@ -41,7 +41,7 @@ final class NotificationPermissionManager: NotificationPermissionManaging {
 
     func authorizationStatus() async -> NotificationPermissionStatus {
         let settings = await center.notificationSettings()
-        switch settings.authorizationStatus {
+        return switch settings.authorizationStatus {
         case .notDetermined: .notDetermined
         case .denied: .denied
         case .authorized: .authorized
@@ -51,4 +51,3 @@ final class NotificationPermissionManager: NotificationPermissionManaging {
         }
     }
 }
-
