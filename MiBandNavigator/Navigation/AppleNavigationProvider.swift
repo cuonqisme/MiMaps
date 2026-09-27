@@ -29,6 +29,9 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     @Published private(set) var activeTravelMode: TravelMode = .car
     @Published private(set) var fallbackUsed = false
     @Published private(set) var routePolyline: MKPolyline?
+    @Published private(set) var routePolylines: [MKPolyline] = []
+    @Published private(set) var routeOptions: [RouteOptionSummary] = []
+    @Published private(set) var selectedRouteIndex = 0
     @Published private(set) var routeRevision = 0
     @Published private(set) var backgroundUpdatesActive = false
     @Published private(set) var lastLocationUpdateAt: Date?
@@ -50,6 +53,7 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     private let instructionEvents = NavigationEventStream<NavigationInstruction>()
     private let classifier = AppleManeuverClassifier()
     private let locationManager = CLLocationManager()
+    private let preferencesProvider: @MainActor () -> RoutePreferences
     private var locationContinuation: CheckedContinuation<CLLocation, Error>?
     private var lastLocation: CLLocation?
     private var destination: Destination?
@@ -59,8 +63,12 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     private var currentStepIndex = 0
     private var offRouteUpdateCount = 0
     private var rerouteInProgress = false
+    private var routeCandidates: [MKRoute] = []
 
-    override init() {
+    init(
+        preferencesProvider: @escaping @MainActor () -> RoutePreferences = { .standard }
+    ) {
+        self.preferencesProvider = preferencesProvider
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -81,8 +89,9 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         }
         transition(to: .calculatingRoute)
         requestedTravelMode = travelMode
-        activeTravelMode = .car
+        activeTravelMode = travelMode == .motorcycle ? .car : travelMode
         fallbackUsed = travelMode == .motorcycle
+        locationManager.activityType = travelMode == .walking ? .fitness : .automotiveNavigation
         self.destination = destination
         let source = try await currentLocation()
         try await rebuildRoute(from: source, isReroute: false)
@@ -104,7 +113,11 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         stopLocationUpdates()
         destination = nil
         routeSteps = []
+        routeCandidates = []
         routePolyline = nil
+        routePolylines = []
+        routeOptions = []
+        selectedRouteIndex = 0
         routeDistance = 0
         routeTravelTime = 0
         currentInstruction = nil
@@ -119,6 +132,12 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
 
     func instructionStream() -> AsyncStream<NavigationInstruction> {
         instructionEvents.stream(initialValue: currentInstruction)
+    }
+
+    func selectRoute(at index: Int) {
+        guard routeCandidates.indices.contains(index),
+              let location = lastLocation else { return }
+        applyRoute(routeCandidates[index], index: index, from: location, isReroute: false)
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -173,12 +192,27 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         let request = MKDirections.Request()
         request.source = mapItem(for: sourceLocation, name: "Vị trí hiện tại")
         request.destination = mapItem(for: destinationLocation, name: destination.displayName)
-        request.transportType = .automobile
-        request.requestsAlternateRoutes = false
+        request.transportType = transportType(for: activeTravelMode)
+        request.requestsAlternateRoutes = true
+        let preferences = preferencesProvider()
+        request.tollPreference = preferences.avoidTolls ? .avoid : .any
+        request.highwayPreference = preferences.avoidHighways ? .avoid : .any
 
         let response = try await MKDirections(request: request).calculate()
-        guard let route = response.routes.first else { throw AppleNavigationProviderError.routeNotFound }
+        guard !response.routes.isEmpty else { throw AppleNavigationProviderError.routeNotFound }
+        routeCandidates = response.routes
+        routePolylines = response.routes.map(\.polyline)
+        routeOptions = makeRouteSummaries(response.routes)
+        applyRoute(response.routes[0], index: 0, from: sourceLocation, isReroute: isReroute)
+    }
 
+    private func applyRoute(
+        _ route: MKRoute,
+        index: Int,
+        from sourceLocation: CLLocation,
+        isReroute: Bool
+    ) {
+        selectedRouteIndex = index
         routePolyline = route.polyline
         routeSteps = route.steps
             .filter { $0.polyline.pointCount > 0 && $0.distance > 0 }
@@ -200,6 +234,48 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
             rerouteCount += 1
         }
         updateGuidance(with: sourceLocation)
+    }
+
+    private func makeRouteSummaries(_ routes: [MKRoute]) -> [RouteOptionSummary] {
+        let fastestTime = routes.map(\.expectedTravelTime).min() ?? 0
+        let shortestDistance = routes.map(\.distance).min() ?? 0
+        return routes.enumerated().map { index, route in
+            var advantages: [String] = []
+            var disadvantages: [String] = []
+            if route.expectedTravelTime <= fastestTime + 1 { advantages.append("Nhanh nhất") }
+            if route.distance <= shortestDistance + 1 { advantages.append("Ngắn nhất") }
+            if !route.hasTolls { advantages.append("Không trạm thu phí") }
+            if !route.hasHighways { advantages.append("Không đường cao tốc") }
+            if route.hasTolls { disadvantages.append("Có trạm thu phí") }
+            if route.hasHighways { disadvantages.append("Có đường cao tốc") }
+            let extraTime = route.expectedTravelTime - fastestTime
+            if extraTime >= 60 {
+                disadvantages.append("Chậm hơn \(Int((extraTime / 60).rounded())) phút")
+            }
+            let extraDistance = route.distance - shortestDistance
+            if extraDistance >= 500 {
+                disadvantages.append("Dài hơn \(DistanceFormatter.string(fromMeters: extraDistance))")
+            }
+            disadvantages.append(contentsOf: route.advisoryNotices.prefix(2))
+            return RouteOptionSummary(
+                id: index,
+                name: route.name.isEmpty ? "Tuyến \(index + 1)" : route.name,
+                distanceMeters: route.distance,
+                expectedTravelTimeSeconds: route.expectedTravelTime,
+                advantages: advantages,
+                disadvantages: disadvantages,
+                hasTolls: route.hasTolls,
+                hasHighways: route.hasHighways
+            )
+        }
+    }
+
+    private func transportType(for travelMode: TravelMode) -> MKDirectionsTransportType {
+        switch travelMode {
+        case .motorcycle, .car: .automobile
+        case .walking: .walking
+        case .transit: .transit
+        }
     }
 
     private func updateGuidance(with location: CLLocation) {

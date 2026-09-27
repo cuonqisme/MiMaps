@@ -51,6 +51,49 @@ final class ApplePlacesSearchService: PlacesSearching {
         )
     }
 
+    func searchNearby(
+        category: NearbyPlaceCategory,
+        center: CLLocationCoordinate2D
+    ) async throws -> [Destination] {
+        guard CLLocationCoordinate2DIsValid(center) else { return [] }
+        activeSearch?.cancel()
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = category.searchQuery
+        request.resultTypes = .pointOfInterest
+        request.region = MKCoordinateRegion(
+            center: center,
+            latitudinalMeters: 15_000,
+            longitudinalMeters: 15_000
+        )
+        let search = MKLocalSearch(request: request)
+        activeSearch = search
+        do {
+            let response = try await search.start()
+            guard activeSearch === search else { throw CancellationError() }
+            return response.mapItems.prefix(30).compactMap { item in
+                let coordinate = coordinate(for: item)
+                guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
+                let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return Destination(
+                    placeID: String(
+                        format: "apple-nearby:%.7f,%.7f",
+                        locale: Locale(identifier: "en_US_POSIX"),
+                        coordinate.latitude,
+                        coordinate.longitude
+                    ),
+                    displayName: name?.isEmpty == false ? name ?? category.localizedName : category.localizedName,
+                    formattedAddress: formattedAddress(for: item),
+                    latitude: coordinate.latitude,
+                    longitude: coordinate.longitude
+                )
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw PlacesSearchError.searchFailed(error.localizedDescription)
+        }
+    }
+
     func autocomplete(query: String) async throws -> [DestinationSuggestion] {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return [] }

@@ -22,7 +22,9 @@ final class AppEnvironment: ObservableObject {
         let mockNavigationProvider = MockNavigationProvider()
         let placesSearchService = ApplePlacesSearchService()
         let locationPermissionManager = LocationPermissionManager()
-        let liveNavigationProvider = AppleNavigationProvider()
+        let liveNavigationProvider = AppleNavigationProvider(
+            preferencesProvider: { settings.routePreferences }
+        )
         let bandTransport = NotificationBandTransport(
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },

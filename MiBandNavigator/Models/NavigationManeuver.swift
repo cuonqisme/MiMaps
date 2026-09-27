@@ -66,5 +66,21 @@ extension NavigationManeuver {
         case .unknown: .unknown
         }
     }
-}
 
+    var phoneSystemImage: String {
+        switch self {
+        case .straight: "arrow.up"
+        case .slightLeft: "arrow.up.left"
+        case .left, .sharpLeft: "arrow.turn.up.left"
+        case .slightRight: "arrow.up.right"
+        case .right, .sharpRight: "arrow.turn.up.right"
+        case .uTurnLeft: "arrow.uturn.left"
+        case .uTurnRight: "arrow.uturn.right"
+        case .mergeLeft, .forkLeft, .rampLeft: "arrow.up.left"
+        case .mergeRight, .forkRight, .rampRight: "arrow.up.right"
+        case .roundabout, .roundaboutExit: "arrow.clockwise.circle.fill"
+        case .destination: "flag.fill"
+        case .unknown: "location.north.fill"
+        }
+    }
+}

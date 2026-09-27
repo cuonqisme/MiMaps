@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreLocation
 
 struct MapScreen: View {
     let environment: AppEnvironment
@@ -13,6 +14,11 @@ struct MapScreen: View {
     @State private var navigationWarning: String?
     @State private var shouldOfferSettings = false
     @State private var recenterRequest = 0
+    @State private var currentUserCoordinate: CLLocationCoordinate2D?
+    @State private var nearbyDestinations: [Destination] = []
+    @State private var selectedNearbyCategory: NearbyPlaceCategory?
+    @State private var isSearchingNearby = false
+    @State private var nearbyError: String?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -25,11 +31,16 @@ struct MapScreen: View {
     var body: some View {
         AppleMapView(
             destination: selectedDestination,
+            nearbyDestinations: nearbyDestinations,
             navigationProvider: navigationProvider,
             displayStyle: settings.mapDisplayStyle,
             recenterRequest: recenterRequest,
             onUserLocationChange: { coordinate in
+                currentUserCoordinate = coordinate
                 environment.placesSearchService.updateSearchCenter(coordinate)
+            },
+            onDestinationSelected: { destination in
+                selectDestination(destination)
             }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -57,21 +68,13 @@ struct MapScreen: View {
                 searchService: environment.placesSearchService,
                 sharedLocationImporter: environment.sharedLocationImporter
             ) { destination in
-                if selectedDestination?.id != destination.id,
-                   navigationCoordinator.state == .routePreview
-                    || navigationCoordinator.state == .navigating
-                    || navigationCoordinator.state == .rerouting {
-                    navigationCoordinator.stopNavigation()
-                }
-                selectedDestination = destination
-                routeError = nil
-                navigationWarning = nil
+                selectDestination(destination)
             }
         }
     }
 
     private var controlsTopPadding: CGFloat {
-        isActivelyNavigating ? 184 : 76
+        isActivelyNavigating ? 184 : 132
     }
 
     private var isActivelyNavigating: Bool {
@@ -142,20 +145,50 @@ struct MapScreen: View {
             || navigationCoordinator.state == .arrived {
             ManeuverCardView(instruction: instruction)
         } else {
-            Button { isSearchPresented = true } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                    Text("Tìm điểm đến…")
-                    Spacer()
+            VStack(spacing: 8) {
+                Button { isSearchPresented = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "magnifyingglass")
+                        Text("Tìm điểm đến…")
+                        Spacer()
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 52)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
                 }
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .frame(minHeight: 52)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+                .buttonStyle(.plain)
+                .accessibilityHint("Mở tìm kiếm địa điểm bằng Apple Maps")
+
+                nearbyCategoryBar
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Mở tìm kiếm địa điểm bằng Apple Maps")
+        }
+    }
+
+    private var nearbyCategoryBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(NearbyPlaceCategory.allCases) { category in
+                    Button {
+                        Task { await toggleNearbyCategory(category) }
+                    } label: {
+                        Label(category.localizedName, systemImage: category.systemImage)
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .frame(height: 38)
+                            .background(
+                                selectedNearbyCategory == category
+                                    ? Color.accentColor
+                                    : Color(uiColor: .secondarySystemBackground),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(selectedNearbyCategory == category ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if isSearchingNearby { ProgressView().padding(.horizontal, 8) }
+            }
         }
     }
 
@@ -190,6 +223,13 @@ struct MapScreen: View {
 
             routeActions(for: destination)
 
+            routeModePicker(for: destination)
+
+            if navigationCoordinator.state == .routePreview,
+               !navigationProvider.routeOptions.isEmpty {
+                routeOptionsView
+            }
+
             if navigationProvider.fallbackUsed {
                 Label(
                     "Apple Maps chưa có tuyến xe máy; đang dùng tuyến ô tô.",
@@ -208,6 +248,11 @@ struct MapScreen: View {
                     .font(.footnote)
                     .foregroundStyle(.orange)
             }
+            if let nearbyError {
+                Text(nearbyError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
             if shouldOfferSettings {
                 Button("Mở Cài đặt iOS") { openSystemSettings() }
                     .font(.footnote.weight(.semibold))
@@ -216,6 +261,118 @@ struct MapScreen: View {
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         .shadow(color: .black.opacity(0.22), radius: 8, y: 4)
+    }
+
+    private func routeModePicker(for destination: Destination) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TravelMode.allCases) { mode in
+                    Button {
+                        settings.travelMode = mode
+                        if navigationCoordinator.state == .routePreview {
+                            Task { await calculateRoute(to: destination) }
+                        }
+                    } label: {
+                        Label(mode.localizedName, systemImage: mode.systemImage)
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .frame(height: 34)
+                            .background(
+                                settings.travelMode == mode ? Color.accentColor : Color.secondary.opacity(0.15),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(settings.travelMode == mode ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var routeOptionsView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(navigationProvider.routeOptions) { route in
+                    Button {
+                        navigationProvider.selectRoute(at: route.id)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text(route.name)
+                                    .font(.subheadline.bold())
+                                    .lineLimit(1)
+                                if navigationProvider.selectedRouteIndex == route.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                }
+                            }
+                            Text("\(DurationFormatter.string(fromSeconds: route.expectedTravelTimeSeconds)) • \(DistanceFormatter.string(fromMeters: route.distanceMeters))")
+                                .font(.caption.weight(.semibold))
+                            if !route.advantages.isEmpty {
+                                Text(route.advantages.joined(separator: " • "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.green)
+                                    .lineLimit(2)
+                            }
+                            if !route.disadvantages.isEmpty {
+                                Text(route.disadvantages.joined(separator: " • "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                                    .lineLimit(2)
+                            }
+                        }
+                        .frame(width: 205, alignment: .leading)
+                        .padding(10)
+                        .background(
+                            navigationProvider.selectedRouteIndex == route.id
+                                ? Color.accentColor.opacity(0.14)
+                                : Color.secondary.opacity(0.1),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func toggleNearbyCategory(_ category: NearbyPlaceCategory) async {
+        if selectedNearbyCategory == category {
+            selectedNearbyCategory = nil
+            nearbyDestinations = []
+            nearbyError = nil
+            return
+        }
+        guard let center = currentUserCoordinate else {
+            nearbyError = "Chưa xác định được vị trí hiện tại. Hãy cho phép vị trí và thử lại."
+            return
+        }
+        selectedNearbyCategory = category
+        isSearchingNearby = true
+        defer { isSearchingNearby = false }
+        do {
+            nearbyDestinations = try await environment.placesSearchService.searchNearby(
+                category: category,
+                center: center
+            )
+            nearbyError = nearbyDestinations.isEmpty ? "Không tìm thấy địa điểm phù hợp gần đây." : nil
+        } catch is CancellationError {
+            return
+        } catch {
+            nearbyDestinations = []
+            nearbyError = error.localizedDescription
+        }
+    }
+
+    private func selectDestination(_ destination: Destination) {
+        if navigationCoordinator.state == .routePreview
+            || navigationCoordinator.state == .navigating
+            || navigationCoordinator.state == .rerouting {
+            navigationCoordinator.stopNavigation()
+        }
+        selectedDestination = destination
+        routeError = nil
+        navigationWarning = nil
+        nearbyError = nil
     }
 
     @ViewBuilder

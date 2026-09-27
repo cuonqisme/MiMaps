@@ -19,10 +19,16 @@ struct SettingsView: View {
             Section("Phương tiện") {
                 Picker("Chế độ di chuyển", selection: $settings.travelMode) {
                     ForEach(TravelMode.allCases) { mode in
-                        Text(mode.localizedName).tag(mode)
+                        Label(mode.localizedName, systemImage: mode.systemImage).tag(mode)
                     }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
+
+                Toggle("Tránh trạm thu phí", isOn: $settings.avoidTolls)
+                Toggle("Tránh đường cao tốc", isOn: $settings.avoidHighways)
+                Text("MapKit không có tùy chọn riêng để tránh cầu vượt. Các tùy chọn được áp dụng khi tính tuyến mới.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Bản đồ") {

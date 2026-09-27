@@ -9,6 +9,8 @@ final class AppSettings: ObservableObject {
         static let developerModeEnabled = "developerModeEnabled"
         static let travelMode = "travelMode"
         static let mapDisplayStyle = "mapDisplayStyle"
+        static let avoidTolls = "avoidTolls"
+        static let avoidHighways = "avoidHighways"
         static let farThresholdMeters = "farThresholdMeters"
         static let mediumThresholdMeters = "mediumThresholdMeters"
         static let nearThresholdMeters = "nearThresholdMeters"
@@ -35,6 +37,14 @@ final class AppSettings: ObservableObject {
 
     @Published var mapDisplayStyle: MapDisplayStyle {
         didSet { defaults.set(mapDisplayStyle.rawValue, forKey: Key.mapDisplayStyle) }
+    }
+
+    @Published var avoidTolls: Bool {
+        didSet { defaults.set(avoidTolls, forKey: Key.avoidTolls) }
+    }
+
+    @Published var avoidHighways: Bool {
+        didSet { defaults.set(avoidHighways, forKey: Key.avoidHighways) }
     }
 
     @Published var farThresholdMeters: Int {
@@ -66,6 +76,8 @@ final class AppSettings: ObservableObject {
         mapDisplayStyle = MapDisplayStyle(
             rawValue: defaults.string(forKey: Key.mapDisplayStyle) ?? ""
         ) ?? .standard
+        avoidTolls = defaults.object(forKey: Key.avoidTolls) as? Bool ?? false
+        avoidHighways = defaults.object(forKey: Key.avoidHighways) as? Bool ?? false
         farThresholdMeters = Self.storedPositiveInt(
             defaults: defaults,
             key: Key.farThresholdMeters,
@@ -86,6 +98,10 @@ final class AppSettings: ObservableObject {
             key: Key.immediateThresholdMeters,
             fallback: 30
         )
+    }
+
+    var routePreferences: RoutePreferences {
+        RoutePreferences(avoidTolls: avoidTolls, avoidHighways: avoidHighways)
     }
 
     private static func storedPositiveInt(

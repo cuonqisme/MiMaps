@@ -2,12 +2,11 @@ import SwiftUI
 
 struct ManeuverCardView: View {
     let instruction: NavigationInstruction
-    private let formatter = BandNotificationFormatter()
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 16) {
-                Text(formatter.symbol(for: instruction.maneuver))
+                Image(systemName: instruction.maneuver.phoneSystemImage)
                     .font(.system(size: 48, weight: .bold))
                     .frame(width: 64)
 
