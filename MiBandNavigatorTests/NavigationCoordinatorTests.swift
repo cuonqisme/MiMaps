@@ -47,7 +47,9 @@ final class NavigationCoordinatorTests: XCTestCase {
         )
 
         await coordinator.startMockRoute()
-        await waitUntil { coordinator.lastError != nil }
+        await waitUntil {
+            coordinator.lastError != nil && coordinator.state == .navigating
+        }
 
         XCTAssertEqual(coordinator.state, .navigating)
         XCTAssertEqual(coordinator.lastError, TestBandError.failed.localizedDescription)
