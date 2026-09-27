@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MapScreen: View {
     let environment: AppEnvironment
@@ -9,6 +10,8 @@ struct MapScreen: View {
     @State private var selectedDestination: Destination?
     @State private var isSearchPresented = false
     @State private var routeError: String?
+    @State private var navigationWarning: String?
+    @State private var shouldOfferSettings = false
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -69,6 +72,15 @@ struct MapScreen: View {
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                         }
+                        if let navigationWarning {
+                            Label(navigationWarning, systemImage: "exclamationmark.triangle")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
+                        if shouldOfferSettings {
+                            Button("Mở Cài đặt iOS") { openSystemSettings() }
+                                .font(.footnote.weight(.semibold))
+                        }
                     }
                     .padding()
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -123,7 +135,7 @@ struct MapScreen: View {
                 .frame(maxWidth: .infinity)
         case .routePreview:
             Button("BẮT ĐẦU CHỈ ĐƯỜNG") {
-                Task { await googleCoordinator.startNavigation() }
+                Task { await startNavigation() }
             }
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity)
@@ -146,10 +158,32 @@ struct MapScreen: View {
         let permission = await locationPermissionManager.requestWhenInUse()
         guard permission.isAuthorized else {
             routeError = "Cần cho phép vị trí để tính tuyến. Trạng thái: \(permission.localizedDescription)."
+            shouldOfferSettings = true
             return
         }
         routeError = nil
+        shouldOfferSettings = false
         await googleCoordinator.calculateRoute(to: destination, travelMode: settings.travelMode)
         routeError = googleCoordinator.lastError
+    }
+
+    private func startNavigation() async {
+        let result = await environment.navigationPermissionPreflight.prepare(
+            notificationsRequired: settings.bandNotificationsEnabled
+        )
+        navigationWarning = result.warning
+        shouldOfferSettings = result.shouldOfferSettings
+        guard result.canStartNavigation else {
+            routeError = result.warning
+            return
+        }
+
+        routeError = nil
+        await googleCoordinator.startNavigation()
+    }
+
+    private func openSystemSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 }

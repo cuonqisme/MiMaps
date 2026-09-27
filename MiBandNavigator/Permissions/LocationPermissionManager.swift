@@ -29,7 +29,14 @@ enum LocationPermissionStatus: String, Sendable, Equatable {
 }
 
 @MainActor
-final class LocationPermissionManager: NSObject, ObservableObject, @MainActor CLLocationManagerDelegate {
+protocol LocationPermissionManaging: AnyObject {
+    func requestWhenInUse() async -> LocationPermissionStatus
+    func requestBackgroundAuthorization() async -> LocationPermissionStatus
+    func authorizationStatus() -> LocationPermissionStatus
+}
+
+@MainActor
+final class LocationPermissionManager: NSObject, ObservableObject, LocationPermissionManaging, @MainActor CLLocationManagerDelegate {
     @Published private(set) var status: LocationPermissionStatus
 
     private let manager: CLLocationManager
@@ -50,6 +57,18 @@ final class LocationPermissionManager: NSObject, ObservableObject, @MainActor CL
             self.continuation = continuation
             manager.requestWhenInUseAuthorization()
         }
+    }
+
+    func requestBackgroundAuthorization() async -> LocationPermissionStatus {
+        let foregroundStatus = await requestWhenInUse()
+        guard foregroundStatus == .authorizedWhenInUse else { return foregroundStatus }
+        manager.requestAlwaysAuthorization()
+        return status
+    }
+
+    func authorizationStatus() -> LocationPermissionStatus {
+        status = Self.currentStatus(for: manager)
+        return status
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

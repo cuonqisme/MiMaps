@@ -112,12 +112,14 @@ final class NavigationCoordinator: ObservableObject {
             lastBandNotification = notification
             lastError = nil
         } catch {
-            report(error)
+            report(error, updateNavigationState: false)
         }
     }
 
-    private func report(_ error: Error) {
+    private func report(_ error: Error, updateNavigationState: Bool = true) {
         lastError = error.localizedDescription
-        state = .error(error.localizedDescription)
+        if updateNavigationState {
+            state = .error(error.localizedDescription)
+        }
     }
 }

@@ -19,6 +19,10 @@ enum NotificationPermissionStatus: String, Sendable {
         case .unknown: "Không xác định"
         }
     }
+
+    var allowsNotifications: Bool {
+        self == .authorized || self == .provisional || self == .ephemeral
+    }
 }
 
 @MainActor

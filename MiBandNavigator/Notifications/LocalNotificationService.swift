@@ -30,6 +30,17 @@ protocol LocalNotificationScheduling: AnyObject {
     func schedule(_ content: NavigationNotificationContent) async throws
 }
 
+enum LocalNotificationError: LocalizedError, Equatable {
+    case permissionDenied
+
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied:
+            "Thông báo đang bị tắt. Hãy bật thông báo cho MiBand Navigator trong Cài đặt iOS."
+        }
+    }
+}
+
 @MainActor
 final class LocalNotificationService: LocalNotificationScheduling {
     nonisolated static let navigationCategoryIdentifier = "NAVIGATION_MANEUVER"
@@ -41,6 +52,16 @@ final class LocalNotificationService: LocalNotificationScheduling {
     }
 
     func schedule(_ content: NavigationNotificationContent) async throws {
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            break
+        case .notDetermined, .denied:
+            throw LocalNotificationError.permissionDenied
+        @unknown default:
+            throw LocalNotificationError.permissionDenied
+        }
+
         let notification = UNMutableNotificationContent()
         notification.title = content.title
         notification.body = content.body

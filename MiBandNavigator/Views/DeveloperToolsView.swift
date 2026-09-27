@@ -32,6 +32,11 @@ struct DeveloperToolsView: View {
                 LabeledContent("Đang dùng", value: googleProvider.activeTravelMode.localizedName)
                 LabeledContent("Fallback ô tô", value: googleProvider.fallbackUsed ? "Có" : "Không")
                 LabeledContent("Phiên bản tuyến", value: String(googleProvider.routeRevision))
+                LabeledContent("Vị trí nền", value: googleProvider.backgroundUpdatesActive ? "Đang chạy" : "Đã dừng")
+                LabeledContent(
+                    "Cập nhật GPS cuối",
+                    value: googleProvider.lastLocationUpdateAt?.formatted() ?? "—"
+                )
 
                 if let instruction = googleCoordinator.currentInstruction {
                     Text("\(BandNotificationFormatter().symbol(for: instruction.maneuver)) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters)) — \(instruction.roadName ?? "—")")

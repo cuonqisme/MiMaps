@@ -12,6 +12,7 @@ final class AppEnvironment: ObservableObject {
     let locationPermissionManager: LocationPermissionManager
     let googleNavigationProvider: GoogleNavigationProvider
     let googleNavigationCoordinator: NavigationCoordinator
+    let navigationPermissionPreflight: NavigationPermissionPreflight
 
     init() {
         let settings = AppSettings()
@@ -39,6 +40,10 @@ final class AppEnvironment: ObservableObject {
         self.placesSearchService = placesSearchService
         self.locationPermissionManager = locationPermissionManager
         self.googleNavigationProvider = googleNavigationProvider
+        navigationPermissionPreflight = NavigationPermissionPreflight(
+            locationManager: locationPermissionManager,
+            notificationManager: notificationPermissionManager
+        )
         navigationCoordinator = NavigationCoordinator(
             provider: mockNavigationProvider,
             bandTransport: bandTransport

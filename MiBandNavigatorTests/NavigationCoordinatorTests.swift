@@ -37,6 +37,22 @@ final class NavigationCoordinatorTests: XCTestCase {
         XCTAssertEqual(transport.stopCount, 1)
     }
 
+    func testBandDeliveryFailureDoesNotStopNavigationState() async {
+        let provider = MockNavigationProvider(automaticSimulationEnabled: false)
+        let transport = BandTransportSpy(sendError: TestBandError.failed)
+        let coordinator = NavigationCoordinator(
+            provider: provider,
+            bandTransport: transport,
+            notificationPolicy: BandNotificationPolicy(cooldownSeconds: 0)
+        )
+
+        await coordinator.startMockRoute()
+        await waitUntil { coordinator.lastError != nil }
+
+        XCTAssertEqual(coordinator.state, .navigating)
+        XCTAssertEqual(coordinator.lastError, TestBandError.failed.localizedDescription)
+    }
+
     private func waitUntil(
         timeoutIterations: Int = 100,
         condition: @escaping @MainActor () -> Bool
@@ -54,9 +70,22 @@ private final class BandTransportSpy: BandTransport {
     private(set) var instructions: [NavigationInstruction] = []
     private(set) var startCount = 0
     private(set) var stopCount = 0
+    private let sendError: Error?
+
+    init(sendError: Error? = nil) {
+        self.sendError = sendError
+    }
 
     func start() async throws { startCount += 1 }
     func stop() { stopCount += 1 }
-    func send(_ instruction: NavigationInstruction) async throws { instructions.append(instruction) }
+    func send(_ instruction: NavigationInstruction) async throws {
+        if let sendError { throw sendError }
+        instructions.append(instruction)
+    }
 }
 
+private enum TestBandError: LocalizedError {
+    case failed
+
+    var errorDescription: String? { "Band delivery failed" }
+}

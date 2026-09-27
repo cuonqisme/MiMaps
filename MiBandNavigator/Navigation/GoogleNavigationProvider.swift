@@ -37,7 +37,7 @@ enum TwoWheelerFallbackPolicy {
 }
 
 @MainActor
-final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProvider, @MainActor GMSNavigatorListener {
+final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProvider, @MainActor GMSNavigatorListener, @MainActor GMSRoadSnappedLocationProviderListener {
     let providerName = "Google Navigation SDK"
 
     @Published private(set) var currentState: NavigationState = .idle
@@ -46,12 +46,15 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
     @Published private(set) var activeTravelMode: TravelMode = .motorcycle
     @Published private(set) var fallbackUsed = false
     @Published private(set) var routeRevision = 0
+    @Published private(set) var backgroundUpdatesActive = false
+    @Published private(set) var lastLocationUpdateAt: Date?
 
     private let stateEvents = NavigationEventStream<NavigationState>()
     private let instructionEvents = NavigationEventStream<NavigationInstruction>()
     private let instructionFactory = GoogleNavigationInstructionFactory()
     private weak var mapView: GMSMapView?
     private var navigator: GMSNavigator?
+    private var roadSnappedLocationProvider: GMSRoadSnappedLocationProvider?
     private var routeIsCalculated = false
     private var isInitialized = false
 
@@ -122,12 +125,15 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         }
         transition(to: .startingNavigation)
         navigator.isGuidanceActive = true
+        navigator.sendsBackgroundNotifications = false
+        startBackgroundLocationUpdates()
         mapView.cameraMode = .following
         transition(to: .navigating)
     }
 
     func stopNavigation() {
         navigator?.isGuidanceActive = false
+        stopBackgroundLocationUpdates()
         navigator?.clearDestinations()
         routeIsCalculated = false
         transition(to: .stopped)
@@ -182,6 +188,7 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
 
     func navigator(_ navigator: GMSNavigator, didArriveAt waypoint: GMSNavigationWaypoint) {
         navigator.isGuidanceActive = false
+        stopBackgroundLocationUpdates()
         routeIsCalculated = false
         emit(
             NavigationInstruction(
@@ -197,6 +204,14 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
         transition(to: .arrived)
     }
 
+    func locationProvider(
+        _ locationProvider: GMSRoadSnappedLocationProvider,
+        didUpdate location: CLLocation
+    ) {
+        _ = locationProvider
+        lastLocationUpdateAt = location.timestamp
+    }
+
     private func configureNavigation(on mapView: GMSMapView) {
         mapView.isNavigationEnabled = true
         mapView.isMyLocationEnabled = true
@@ -210,6 +225,14 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
             navigator?.add(self)
             navigator?.distanceUpdateThreshold = 1
             navigator?.timeUpdateThreshold = 1
+        }
+        let newLocationProvider = mapView.roadSnappedLocationProvider
+        if roadSnappedLocationProvider !== newLocationProvider {
+            if let roadSnappedLocationProvider {
+                roadSnappedLocationProvider.stopUpdatingLocation()
+                _ = roadSnappedLocationProvider.remove(self)
+            }
+            roadSnappedLocationProvider = newLocationProvider
         }
     }
 
@@ -275,5 +298,24 @@ final class GoogleNavigationProvider: NSObject, ObservableObject, NavigationProv
     private func emit(_ instruction: NavigationInstruction) {
         currentInstruction = instruction
         instructionEvents.yield(instruction)
+    }
+
+    private func startBackgroundLocationUpdates() {
+        guard !backgroundUpdatesActive, let roadSnappedLocationProvider else { return }
+        roadSnappedLocationProvider.add(self)
+        roadSnappedLocationProvider.allowsBackgroundLocationUpdates = true
+        roadSnappedLocationProvider.startUpdatingLocation()
+        backgroundUpdatesActive = true
+    }
+
+    private func stopBackgroundLocationUpdates() {
+        guard let roadSnappedLocationProvider else {
+            backgroundUpdatesActive = false
+            return
+        }
+        roadSnappedLocationProvider.stopUpdatingLocation()
+        roadSnappedLocationProvider.allowsBackgroundLocationUpdates = false
+        _ = roadSnappedLocationProvider.remove(self)
+        backgroundUpdatesActive = false
     }
 }

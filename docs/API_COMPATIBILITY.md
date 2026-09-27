@@ -19,6 +19,8 @@ The wearable data feed uses `GMSNavigatorListener.navigator(_:didUpdate:)` with 
 
 Live instructions and mock instructions use the same `NavigationCoordinator`, threshold/cooldown policy, deduplicator, and `NotificationBandTransport`. This pipeline has an integration test with a controllable provider and notification scheduler; real Mi Fitness and band mirroring remain a physical-device verification item.
 
+Background guidance uses the current `GMSRoadSnappedLocationProviderListener`, `allowsBackgroundLocationUpdates`, `startUpdatingLocation()`, and `stopUpdatingLocation()` APIs. The target declares `UIBackgroundModes/location`. Updates are enabled only during active guidance, following Apple and Google battery guidance.
+
 ## Official references
 
 - Apple Xcode 26 release notes: https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes
