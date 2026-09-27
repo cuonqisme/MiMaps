@@ -9,6 +9,20 @@ struct NavigationDebugView: View {
     let permissionManager: NotificationPermissionManaging
     @State private var notificationStatus: NotificationPermissionStatus = .notDetermined
 
+    init(
+        coordinator: NavigationCoordinator,
+        googleProvider: GoogleNavigationProvider,
+        locationPermissionManager: LocationPermissionManager,
+        settings: AppSettings,
+        permissionManager: NotificationPermissionManaging
+    ) {
+        _coordinator = ObservedObject(wrappedValue: coordinator)
+        _googleProvider = ObservedObject(wrappedValue: googleProvider)
+        _locationPermissionManager = ObservedObject(wrappedValue: locationPermissionManager)
+        _settings = ObservedObject(wrappedValue: settings)
+        self.permissionManager = permissionManager
+    }
+
     var body: some View {
         List {
             Section("Ứng dụng") {
