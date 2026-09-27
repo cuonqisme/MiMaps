@@ -32,7 +32,7 @@ protocol LocalNotificationScheduling: AnyObject {
 
 @MainActor
 final class LocalNotificationService: LocalNotificationScheduling {
-    static let navigationCategoryIdentifier = "NAVIGATION_MANEUVER"
+    nonisolated static let navigationCategoryIdentifier = "NAVIGATION_MANEUVER"
 
     private let center: UNUserNotificationCenter
 
