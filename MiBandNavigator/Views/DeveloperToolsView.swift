@@ -1,11 +1,16 @@
+import Foundation
 import SwiftUI
 
 struct DeveloperToolsView: View {
     @ObservedObject private var settings: AppSettings
+    @ObservedObject private var coordinator: NavigationCoordinator
+    @ObservedObject private var mockProvider: MockNavigationProvider
     @StateObject private var viewModel: DeveloperToolsViewModel
 
     init(environment: AppEnvironment) {
         _settings = ObservedObject(wrappedValue: environment.settings)
+        _coordinator = ObservedObject(wrappedValue: environment.navigationCoordinator)
+        _mockProvider = ObservedObject(wrappedValue: environment.mockNavigationProvider)
         _viewModel = StateObject(
             wrappedValue: DeveloperToolsViewModel(
                 permissionManager: environment.notificationPermissionManager,
@@ -17,6 +22,40 @@ struct DeveloperToolsView: View {
 
     var body: some View {
         Form {
+            Section("Mock Navigation") {
+                LabeledContent("Trạng thái", value: String(describing: coordinator.state))
+                LabeledContent("Tốc độ", value: String(format: "%.2gx", mockProvider.speedMultiplier))
+
+                Button("BẮT ĐẦU TUYẾN MÔ PHỎNG") {
+                    Task { await coordinator.startMockRoute() }
+                }
+                .buttonStyle(.borderedProminent)
+
+                HStack {
+                    Button("Tạm dừng") { mockProvider.pause() }
+                    Button("Tiếp tục") { mockProvider.resume() }
+                }
+                HStack {
+                    Button("Nhanh hơn") { mockProvider.speedUp() }
+                    Button("Chậm hơn") { mockProvider.slowDown() }
+                }
+                Button("Chuyển chặng tiếp theo") { mockProvider.nextManeuver() }
+                Button("Đặt lại", role: .destructive) { mockProvider.reset() }
+
+                if let instruction = coordinator.currentInstruction {
+                    Text("\(BandNotificationFormatter().symbol(for: instruction.maneuver)) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters)) — \(instruction.roadName ?? "—")")
+                        .font(.headline)
+                }
+
+                NavigationLink("Mở bảng gỡ lỗi") {
+                    NavigationDebugView(
+                        coordinator: coordinator,
+                        mockProvider: mockProvider,
+                        permissionManager: viewModel.permissionManagerForDebug
+                    )
+                }
+            }
+
             Section("Quyền thông báo") {
                 LabeledContent("Trạng thái", value: viewModel.permissionStatus.localizedDescription)
                 Button("Cho phép thông báo") {
@@ -72,4 +111,3 @@ struct DeveloperToolsView: View {
         .task { await viewModel.refreshPermissionStatus() }
     }
 }
-

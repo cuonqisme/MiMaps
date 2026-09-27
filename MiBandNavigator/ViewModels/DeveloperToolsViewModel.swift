@@ -62,12 +62,14 @@ final class DeveloperToolsViewModel: ObservableObject {
 
     private let permissionManager: NotificationPermissionManaging
     private let scheduler: LocalNotificationScheduling
-    private let soundEnabled: () -> Bool
+    private let soundEnabled: @MainActor () -> Bool
+
+    var permissionManagerForDebug: NotificationPermissionManaging { permissionManager }
 
     init(
         permissionManager: NotificationPermissionManaging,
         scheduler: LocalNotificationScheduling,
-        soundEnabled: @escaping () -> Bool
+        soundEnabled: @escaping @MainActor () -> Bool
     ) {
         self.permissionManager = permissionManager
         self.scheduler = scheduler

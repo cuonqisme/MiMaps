@@ -1,0 +1,123 @@
+import Combine
+import Foundation
+
+@MainActor
+final class NavigationCoordinator: ObservableObject {
+    @Published private(set) var state: NavigationState = .idle
+    @Published private(set) var currentInstruction: NavigationInstruction?
+    @Published private(set) var lastBandNotification: NavigationInstruction?
+    @Published private(set) var firedThresholds: Set<Int> = []
+    @Published private(set) var lastError: String?
+
+    let provider: NavigationProvider
+    private let bandTransport: BandTransport
+    private var notificationPolicy: BandNotificationPolicy
+    private var stateTask: Task<Void, Never>?
+    private var instructionTask: Task<Void, Never>?
+    private var isInitialized = false
+
+    init(
+        provider: NavigationProvider,
+        bandTransport: BandTransport,
+        notificationPolicy: BandNotificationPolicy = BandNotificationPolicy()
+    ) {
+        self.provider = provider
+        self.bandTransport = bandTransport
+        self.notificationPolicy = notificationPolicy
+        connectStreams()
+    }
+
+    func initialize() async {
+        guard !isInitialized else { return }
+        do {
+            try await bandTransport.start()
+            try await provider.initialize()
+            isInitialized = true
+            lastError = nil
+        } catch {
+            report(error)
+        }
+    }
+
+    func calculateRoute(to destination: Destination, travelMode: TravelMode) async {
+        await initialize()
+        do {
+            notificationPolicy.reset()
+            firedThresholds = []
+            try await provider.calculateRoute(to: destination, travelMode: travelMode)
+            lastError = nil
+        } catch {
+            report(error)
+        }
+    }
+
+    func startNavigation() async {
+        do {
+            try await provider.startNavigation()
+            lastError = nil
+        } catch {
+            report(error)
+        }
+    }
+
+    func startMockRoute() async {
+        let destination = Destination(
+            displayName: "Điểm đến mô phỏng",
+            formattedAddress: "Hà Nội, Việt Nam",
+            latitude: 21.0285,
+            longitude: 105.8542
+        )
+        await calculateRoute(to: destination, travelMode: .motorcycle)
+        guard lastError == nil else { return }
+        await startNavigation()
+    }
+
+    func stopNavigation() {
+        provider.stopNavigation()
+        bandTransport.stop()
+        isInitialized = false
+        notificationPolicy.reset()
+        firedThresholds = []
+    }
+
+    private func connectStreams() {
+        stateTask?.cancel()
+        instructionTask?.cancel()
+
+        let states = provider.stateStream()
+        stateTask = Task { [weak self] in
+            for await state in states {
+                guard !Task.isCancelled else { return }
+                self?.state = state
+            }
+        }
+
+        let instructions = provider.instructionStream()
+        instructionTask = Task { [weak self] in
+            for await instruction in instructions {
+                guard !Task.isCancelled else { return }
+                await self?.process(instruction)
+            }
+        }
+    }
+
+    private func process(_ instruction: NavigationInstruction) async {
+        currentInstruction = instruction
+        let decision = notificationPolicy.evaluate(instruction)
+        firedThresholds = notificationPolicy.firedThresholds
+        guard let notification = decision.notification else { return }
+
+        do {
+            try await bandTransport.send(notification)
+            lastBandNotification = notification
+            lastError = nil
+        } catch {
+            report(error)
+        }
+    }
+
+    private func report(_ error: Error) {
+        lastError = error.localizedDescription
+        state = .error(error.localizedDescription)
+    }
+}

@@ -4,16 +4,16 @@ import Foundation
 final class NotificationBandTransport: BandTransport {
     private let scheduler: LocalNotificationScheduling
     private let formatter: BandNotificationFormatter
-    private let notificationsEnabled: () -> Bool
-    private let soundEnabled: () -> Bool
+    private let notificationsEnabled: @MainActor () -> Bool
+    private let soundEnabled: @MainActor () -> Bool
     private var deduplicator = BandInstructionDeduplicator()
     private var isStarted = false
 
     init(
         scheduler: LocalNotificationScheduling,
         formatter: BandNotificationFormatter = BandNotificationFormatter(),
-        notificationsEnabled: @escaping () -> Bool = { true },
-        soundEnabled: @escaping () -> Bool = { false }
+        notificationsEnabled: @escaping @MainActor () -> Bool = { true },
+        soundEnabled: @escaping @MainActor () -> Bool = { false }
     ) {
         self.scheduler = scheduler
         self.formatter = formatter
@@ -37,4 +37,3 @@ final class NotificationBandTransport: BandTransport {
         try await scheduler.schedule(formatter.format(instruction, soundEnabled: soundEnabled()))
     }
 }
-
