@@ -13,6 +13,15 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Phương tiện") {
+                Picker("Chế độ di chuyển", selection: $settings.travelMode) {
+                    ForEach(TravelMode.allCases) { mode in
+                        Text(mode.localizedName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Thông báo Mi Band") {
                 Toggle("Bật thông báo điều hướng", isOn: $settings.bandNotificationsEnabled)
                 Toggle("Âm thanh trên điện thoại", isOn: $settings.notificationSoundEnabled)
@@ -60,4 +69,3 @@ struct SettingsView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
     }
 }
-

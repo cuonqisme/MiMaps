@@ -7,6 +7,7 @@ final class AppSettings: ObservableObject {
         static let bandNotificationsEnabled = "bandNotificationsEnabled"
         static let notificationSoundEnabled = "notificationSoundEnabled"
         static let developerModeEnabled = "developerModeEnabled"
+        static let travelMode = "travelMode"
     }
 
     private let defaults: UserDefaults
@@ -23,11 +24,15 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(developerModeEnabled, forKey: Key.developerModeEnabled) }
     }
 
+    @Published var travelMode: TravelMode {
+        didSet { defaults.set(travelMode.rawValue, forKey: Key.travelMode) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         bandNotificationsEnabled = defaults.object(forKey: Key.bandNotificationsEnabled) as? Bool ?? true
         notificationSoundEnabled = defaults.object(forKey: Key.notificationSoundEnabled) as? Bool ?? false
         developerModeEnabled = defaults.object(forKey: Key.developerModeEnabled) as? Bool ?? false
+        travelMode = TravelMode(rawValue: defaults.string(forKey: Key.travelMode) ?? "") ?? .motorcycle
     }
 }
-

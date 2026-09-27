@@ -26,6 +26,9 @@ packages:
   GooglePlaces:
     url: https://github.com/googlemaps/ios-places-sdk
     exactVersion: 11.1.0
+  GoogleNavigation:
+    url: https://github.com/googlemaps/ios-navigation-sdk
+    exactVersion: 11.2.0
 targets:
   MiBandNavigator:
     type: application
@@ -37,6 +40,8 @@ targets:
         product: GoogleMaps
       - package: GooglePlaces
         product: GooglePlacesSwift
+      - package: GoogleNavigation
+        product: GoogleNavigation
     configFiles:
       Debug: Configuration/Base.xcconfig
       Release: Configuration/Base.xcconfig

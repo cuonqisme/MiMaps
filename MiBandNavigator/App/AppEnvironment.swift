@@ -9,6 +9,9 @@ final class AppEnvironment: ObservableObject {
     let mockNavigationProvider: MockNavigationProvider
     let navigationCoordinator: NavigationCoordinator
     let placesSearchService: GooglePlacesSearchService
+    let locationPermissionManager: LocationPermissionManager
+    let googleNavigationProvider: GoogleNavigationProvider
+    let googleNavigationCoordinator: NavigationCoordinator
 
     init() {
         let settings = AppSettings()
@@ -16,7 +19,14 @@ final class AppEnvironment: ObservableObject {
         let localNotificationService = LocalNotificationService()
         let mockNavigationProvider = MockNavigationProvider()
         let placesSearchService = GooglePlacesSearchService()
+        let locationPermissionManager = LocationPermissionManager()
+        let googleNavigationProvider = GoogleNavigationProvider()
         let bandTransport = NotificationBandTransport(
+            scheduler: localNotificationService,
+            notificationsEnabled: { settings.bandNotificationsEnabled },
+            soundEnabled: { settings.notificationSoundEnabled }
+        )
+        let googleBandTransport = NotificationBandTransport(
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },
             soundEnabled: { settings.notificationSoundEnabled }
@@ -27,9 +37,15 @@ final class AppEnvironment: ObservableObject {
         self.localNotificationService = localNotificationService
         self.mockNavigationProvider = mockNavigationProvider
         self.placesSearchService = placesSearchService
+        self.locationPermissionManager = locationPermissionManager
+        self.googleNavigationProvider = googleNavigationProvider
         navigationCoordinator = NavigationCoordinator(
             provider: mockNavigationProvider,
             bandTransport: bandTransport
+        )
+        googleNavigationCoordinator = NavigationCoordinator(
+            provider: googleNavigationProvider,
+            bandTransport: googleBandTransport
         )
     }
 }

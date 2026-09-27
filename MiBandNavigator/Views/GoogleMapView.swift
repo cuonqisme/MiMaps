@@ -1,4 +1,5 @@
 import GoogleMaps
+import GoogleNavigation
 import SwiftUI
 
 struct GoogleMapView: UIViewRepresentable {
@@ -6,17 +7,20 @@ struct GoogleMapView: UIViewRepresentable {
     private let longitude: CLLocationDegrees
     private let zoom: Float
     private let destination: Destination?
+    private let navigationProvider: GoogleNavigationProvider?
 
     init(
         latitude: CLLocationDegrees = 21.0285,
         longitude: CLLocationDegrees = 105.8542,
         zoom: Float = 13,
-        destination: Destination? = nil
+        destination: Destination? = nil,
+        navigationProvider: GoogleNavigationProvider? = nil
     ) {
         self.latitude = latitude
         self.longitude = longitude
         self.zoom = zoom
         self.destination = destination
+        self.navigationProvider = navigationProvider
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -27,6 +31,7 @@ struct GoogleMapView: UIViewRepresentable {
         let mapView = GMSMapView(options: options)
         mapView.settings.compassButton = true
         mapView.settings.myLocationButton = true
+        navigationProvider?.attach(mapView: mapView)
         return mapView
     }
 

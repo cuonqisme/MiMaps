@@ -2,8 +2,21 @@ import SwiftUI
 
 struct MapScreen: View {
     let environment: AppEnvironment
+    @ObservedObject private var googleProvider: GoogleNavigationProvider
+    @ObservedObject private var googleCoordinator: NavigationCoordinator
+    @ObservedObject private var locationPermissionManager: LocationPermissionManager
+    @ObservedObject private var settings: AppSettings
     @State private var selectedDestination: Destination?
     @State private var isSearchPresented = false
+    @State private var routeError: String?
+
+    init(environment: AppEnvironment) {
+        self.environment = environment
+        _googleProvider = ObservedObject(wrappedValue: environment.googleNavigationProvider)
+        _googleCoordinator = ObservedObject(wrappedValue: environment.googleNavigationCoordinator)
+        _locationPermissionManager = ObservedObject(wrappedValue: environment.locationPermissionManager)
+        _settings = ObservedObject(wrappedValue: environment.settings)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -35,9 +48,18 @@ struct MapScreen: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        Button("XEM TRƯỚC TUYẾN ĐƯỜNG") {}
-                            .buttonStyle(.borderedProminent)
-                            .frame(maxWidth: .infinity)
+                        routeActions(for: selectedDestination)
+
+                        if googleProvider.fallbackUsed {
+                            Label("Xe máy không được hỗ trợ; đang dùng tuyến ô tô.", systemImage: "exclamationmark.triangle")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
+                        if let routeError {
+                            Text(routeError)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
                     }
                     .padding()
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -58,7 +80,10 @@ struct MapScreen: View {
     private var mapContent: some View {
         switch AppConfig.googleAPIConfigurationStatus {
         case .configured:
-            GoogleMapView(destination: selectedDestination)
+            GoogleMapView(
+                destination: selectedDestination,
+                navigationProvider: environment.googleNavigationProvider
+            )
         case .missing:
             VStack(spacing: 16) {
                 Image(systemName: "map.fill")
@@ -72,5 +97,43 @@ struct MapScreen: View {
             }
             .padding(32)
         }
+    }
+
+    @ViewBuilder
+    private func routeActions(for destination: Destination) -> some View {
+        switch googleCoordinator.state {
+        case .calculatingRoute, .startingNavigation:
+            ProgressView("Đang tính tuyến…")
+                .frame(maxWidth: .infinity)
+        case .routePreview:
+            Button("BẮT ĐẦU CHỈ ĐƯỜNG") {
+                Task { await googleCoordinator.startNavigation() }
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+        case .navigating, .rerouting:
+            Button("DỪNG CHỈ ĐƯỜNG", role: .destructive) {
+                googleCoordinator.stopNavigation()
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+        default:
+            Button("XEM TRƯỚC TUYẾN ĐƯỜNG") {
+                Task { await calculateRoute(to: destination) }
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func calculateRoute(to destination: Destination) async {
+        let permission = await locationPermissionManager.requestWhenInUse()
+        guard permission.isAuthorized else {
+            routeError = "Cần cho phép vị trí để tính tuyến. Trạng thái: \(permission.localizedDescription)."
+            return
+        }
+        routeError = nil
+        await googleCoordinator.calculateRoute(to: destination, travelMode: settings.travelMode)
+        routeError = googleCoordinator.lastError
     }
 }
