@@ -52,7 +52,7 @@ cat > "${report_path}" <<REPORT
 
 | Field | Result |
 |---|---|
-| Application version | ${MARKETING_VERSION:-0.1.0} |
+| Application version | ${MARKETING_VERSION:-1.0.0} |
 | Build number | ${BUILD_NUMBER:-unknown} |
 | Git commit | ${commit} |
 | Xcode | ${xcode_version} |

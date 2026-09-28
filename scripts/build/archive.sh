@@ -12,7 +12,7 @@ esac
 
 archive_path="${ARCHIVE_PATH:-artifacts/release/MiMaps.xcarchive}"
 build_number="${BUILD_NUMBER:-1}"
-marketing_version="${MARKETING_VERSION:-0.1.0}"
+marketing_version="${MARKETING_VERSION:-1.0.0}"
 bundle_id="${BUNDLE_ID:-com.example.mibandnavigator}"
 archive_log="${ARCHIVE_LOG:-artifacts/release/archive.log}"
 

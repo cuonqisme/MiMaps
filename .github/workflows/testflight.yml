@@ -25,7 +25,7 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       BUILD_NUMBER: ${{ github.run_number }}
-      MARKETING_VERSION: 0.1.0
+      MARKETING_VERSION: 1.0.0
       ARCHIVE_PATH: artifacts/release/MiMaps.xcarchive
       EXPORT_PATH: artifacts/release/export
       EXPORT_METHOD: app-store-connect
@@ -101,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MiMaps-testflight-${{ github.run_number }}
+          name: MiMaps_1.0.0.${{ github.run_number }}-testflight
           path: |
             artifacts/release/
             test-results/

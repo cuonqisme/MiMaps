@@ -6,6 +6,8 @@ export_path="${EXPORT_PATH:-artifacts/release/export}"
 export_method="${EXPORT_METHOD:-app-store-connect}"
 export_options_path="${EXPORT_OPTIONS_PATH:-artifacts/release/ExportOptions.plist}"
 export_log="${EXPORT_LOG:-artifacts/release/export.log}"
+marketing_version="${MARKETING_VERSION:-1.0.0}"
+build_number="${BUILD_NUMBER:-1}"
 
 : "${APPLE_TEAM_ID:?APPLE_TEAM_ID is required}"
 : "${BUNDLE_ID:?BUNDLE_ID is required}"
@@ -63,6 +65,12 @@ ipa_path="$(find "${export_path}" -maxdepth 1 -type f -name '*.ipa' -print -quit
 if [[ -z "${ipa_path}" ]]; then
   echo "xcodebuild completed without producing an IPA in ${export_path}" >&2
   exit 1
+fi
+
+versioned_ipa_path="${export_path}/MiMaps_${marketing_version}.${build_number}.ipa"
+if [[ "${ipa_path}" != "${versioned_ipa_path}" ]]; then
+  mv "${ipa_path}" "${versioned_ipa_path}"
+  ipa_path="${versioned_ipa_path}"
 fi
 
 checksum_path="${ipa_path}.sha256"
