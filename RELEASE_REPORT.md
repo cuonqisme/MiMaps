@@ -1,4 +1,4 @@
-# MiBand Navigator release report
+# MiMaps release report
 
 Latest verified signed release workflow: [GitHub Actions run 36347404425](https://github.com/cuonqisme/MiMaps/actions/runs/36347404425).
 
@@ -17,7 +17,7 @@ Latest verified signed release workflow: [GitHub Actions run 36347404425](https:
 | Unit tests | PASSED — 54 tests |
 | Signed archive | PASSED |
 | IPA | PASSED — 2,070,144 bytes |
-| IPA artifact | `MiBandNavigator-release-7` |
+| IPA artifact | Superseded by the pending MiMaps release |
 | IPA SHA-256 | `30e2ff5d7048d2dd8d8a205b2dbc650eae224e32fe4384a2609ed689be6d0f70` |
 | Signing method | Manual certificate and Ad Hoc provisioning profile |
 | Google SDK entries | 0 |
@@ -32,7 +32,7 @@ Latest verified signed release workflow: [GitHub Actions run 36347404425](https:
 
 ## Physical verification remaining
 
-- Install `artifacts/MiBandNavigator-Reliability.ipa` on the registered iPhone and verify route cleanup, preview notification suppression, mock controls, live Apple Maps search/routing, nearby POIs, recent destinations, traffic, background GPS, lock-screen notifications, Mi Fitness mirroring, and the five fallback maneuver cases on Mi Band 9.
+- Install the next signed MiMaps IPA on the registered iPhone and verify route cleanup, preview notification suppression, mock controls, live Apple Maps search/routing, nearby POIs, recent destinations, traffic, background GPS, lock-screen notifications, Mi Fitness mirroring, and the five fallback maneuver cases on Mi Band 9.
 - MapKit has no motorcycle transport mode; motorcycle requests intentionally use an automobile route and display that fallback in the UI.
 - MapKit does not provide camera/speed-limit data or an avoid-overpass preference. Safety notification models are ready for a licensed provider, but the app does not fabricate unavailable data.
 - Direct Google Maps Share Sheet integration requires a separately provisioned Share Extension bundle ID/profile. Build 7 supports Google Maps copy-link import but intentionally contains no unsigned extension.

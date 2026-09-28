@@ -6,10 +6,10 @@ These checks require a real iPhone, Xiaomi Smart Band 9, Mi Fitness, a valid Goo
 
 1. Install Mi Fitness from the App Store and pair the Smart Band 9.
 2. Confirm Bluetooth is connected and the band has sufficient charge.
-3. Install the signed MiBand Navigator build through TestFlight or an Ad Hoc/development profile.
-4. On iPhone, allow MiBand Navigator notifications and location access. Choose **Always** only if lock-screen/background navigation is being tested.
-5. In Mi Fitness, enable iPhone app-notification mirroring for MiBand Navigator. Menu names vary by Mi Fitness version/region.
-6. Leave phone-notification sound off initially; MiBand Navigator does not control the band's vibration pattern.
+3. Install the signed MiMaps build through TestFlight or an Ad Hoc/development profile.
+4. On iPhone, allow MiMaps notifications and location access. Choose **Always** only if lock-screen/background navigation is being tested.
+5. In Mi Fitness, enable iPhone app-notification mirroring for MiMaps. Menu names vary by Mi Fitness version/region.
+6. Leave phone-notification sound off initially; MiMaps does not control the band's vibration pattern.
 
 ## Symbol and notification test
 

@@ -1,5 +1,7 @@
 # Changelog
 
+Application/project rename in this release: MiMaps replaces the former product name across the user interface, Xcode project, schemes, test module, archives, and distribution artifacts. The provisioned bundle identifier is retained for install compatibility.
+
 ## 0.1.0 — in development
 
 - Replaced the previous Google SDK integration with native Apple MapKit search, route preview, active guidance, and rerouting.

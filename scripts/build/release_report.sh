@@ -2,10 +2,10 @@
 set -euo pipefail
 
 release_dir="${RELEASE_DIR:-artifacts/release}"
-archive_path="${ARCHIVE_PATH:-${release_dir}/MiBandNavigator.xcarchive}"
+archive_path="${ARCHIVE_PATH:-${release_dir}/MiMaps.xcarchive}"
 export_path="${EXPORT_PATH:-${release_dir}/export}"
 report_path="${release_dir}/RELEASE_REPORT.md"
-result_bundle="${TEST_RESULT_BUNDLE:-test-results/MiBandNavigator.xcresult}"
+result_bundle="${TEST_RESULT_BUNDLE:-test-results/MiMaps.xcresult}"
 
 mkdir -p "${release_dir}"
 
@@ -48,7 +48,7 @@ if [[ -f "${release_dir}/testflight-upload.txt" ]]; then
 fi
 
 cat > "${report_path}" <<REPORT
-# MiBand Navigator release report
+# MiMaps release report
 
 | Field | Result |
 |---|---|

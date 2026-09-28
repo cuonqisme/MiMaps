@@ -7,7 +7,7 @@ xcuserdata/
 *.xcscmblueprint
 
 # Generated project (generated from project.yml)
-MiBandNavigator.xcodeproj/
+MiMaps.xcodeproj/
 
 # Secrets and signing material
 Configuration/Secrets.xcconfig

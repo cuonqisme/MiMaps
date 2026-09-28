@@ -1,5 +1,5 @@
 import XCTest
-@testable import MiBandNavigator
+@testable import MiMaps
 
 @MainActor
 final class BandTransportTests: XCTestCase {

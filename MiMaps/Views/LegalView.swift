@@ -16,7 +16,7 @@ struct LegalView: View {
             }
 
             Section("Dữ liệu và quyền riêng tư") {
-                Text("MiBand Navigator không có tài khoản người dùng, máy chủ riêng hoặc SDK phân tích. Ứng dụng không lưu lịch sử tọa độ. MapKit xử lý yêu cầu tìm kiếm và tuyến đường theo điều khoản của Apple.")
+                Text("MiMaps không có tài khoản người dùng, máy chủ riêng hoặc SDK phân tích. Ứng dụng không lưu lịch sử tọa độ. MapKit xử lý yêu cầu tìm kiếm và tuyến đường theo điều khoản của Apple.")
             }
 
             Section("Mi Band") {

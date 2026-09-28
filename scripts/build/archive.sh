@@ -10,7 +10,7 @@ case "${mode}" in
     ;;
 esac
 
-archive_path="${ARCHIVE_PATH:-artifacts/release/MiBandNavigator.xcarchive}"
+archive_path="${ARCHIVE_PATH:-artifacts/release/MiMaps.xcarchive}"
 build_number="${BUILD_NUMBER:-1}"
 marketing_version="${MARKETING_VERSION:-0.1.0}"
 bundle_id="${BUNDLE_ID:-com.example.mibandnavigator}"
@@ -48,8 +48,8 @@ fi
 
 echo "Creating ${mode} Release archive at ${archive_path}"
 xcodebuild \
-  -project MiBandNavigator.xcodeproj \
-  -scheme MiBandNavigator \
+  -project MiMaps.xcodeproj \
+  -scheme MiMaps \
   -configuration Release \
   -destination 'generic/platform=iOS' \
   -archivePath "${archive_path}" \

@@ -1,5 +1,5 @@
 import XCTest
-@testable import MiBandNavigator
+@testable import MiMaps
 
 final class BandNotificationPolicyTests: XCTestCase {
     func test510To499Crosses500() {

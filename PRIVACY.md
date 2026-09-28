@@ -1,6 +1,6 @@
 # Privacy
 
-MiBand Navigator uses device location only to calculate and follow an active navigation route. It does not store coordinate history, create user profiles, include analytics, or transmit location to an application-owned backend.
+MiMaps uses device location only to calculate and follow an active navigation route. It does not store coordinate history, create user profiles, include analytics, or transmit location to an application-owned backend.
 
 Apple MapKit communicates with Apple to search for places and calculate routes under Apple's terms and privacy policy. iOS local notifications contain the upcoming maneuver, distance, and road name so iOS/Mi Fitness can mirror them to the paired band.
 

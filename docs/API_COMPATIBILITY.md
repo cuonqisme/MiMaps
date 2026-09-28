@@ -1,31 +1,26 @@
 # API compatibility
 
-Verified against official vendor documentation on 2026-09-27.
+Verified against the current project and official platform documentation on 2026-09-28.
 
 | Area | Selected baseline | Notes |
 |---|---|---|
-| Apple toolchain | Xcode 26.6, Swift 6.2 | App Store Connect requires Xcode 26+ and an iOS 26 SDK from 2026-04-28. |
-| Deployment target | iOS 16.0 | Current Google Maps Platform iOS SDKs require iOS 16. |
-| GitHub runner | `macos-26` | Explicit runner; Xcode 26.6 is selected with `DEVELOPER_DIR`. |
-| Navigation SDK | 11.2.0 | Package URL is `https://github.com/googlemaps/ios-navigation-sdk`; product is `GoogleNavigation`. Requires Xcode 26, iOS 16, and a motion usage description. |
-| Maps SDK | 11.2.0 | Package URL is `https://github.com/googlemaps/ios-maps-sdk`; product is `GoogleMaps`. |
-| Places Swift SDK | 11.1.0 | Latest stable package listed at verification time. Package URL is `https://github.com/googlemaps/ios-places-sdk`; product is `GooglePlacesSwift`. |
+| Apple toolchain | Xcode 26.6, Swift 6.2 | CI selects Xcode explicitly through `DEVELOPER_DIR`. |
+| Deployment target | iOS 16.0 | Required by the current SwiftUI implementation and release configuration. |
+| GitHub runner | `macos-26` | Used for XcodeGen, simulator tests, archives, and signed IPA export. |
+| Map and place search | Apple MapKit | Native framework; no third-party package or API key is required. |
+| Live location | Apple Core Location | Enabled for active guidance and stopped when navigation ends or arrives. |
+| Wearable delivery | UserNotifications + Mi Fitness mirroring | No proprietary Xiaomi BLE connection is used. |
 
-Google integration uses Swift Package Manager only and will pin exact versions. SDK types are isolated behind provider/service adapters. Simulator unit tests do not require an API key.
+MapKit route calculation supports automobile, walking, and transit. It has no motorcycle route type, so a motorcycle request is explicitly labelled as an automobile fallback. MapKit also does not provide speed-camera data or a dedicated avoid-overpass option.
 
-Route calculation requests two-wheeler mode for motorcycle navigation. It falls back to driving only when Navigation SDK explicitly returns `travelModeUnsupported`; all other route failures are surfaced to the user.
+MapKit directions, location updates, and mock instructions feed the same `NavigationCoordinator`, threshold/cooldown policy, deduplicator, and `NotificationBandTransport`. Simulator CI verifies the provider-neutral logic; live routing, background GPS, Mi Fitness mirroring, and band rendering still require physical-device testing.
 
-The wearable data feed uses `GMSNavigatorListener.navigator(_:didUpdate:)` with `GMSNavigationNavInfo`. It maps `currentStep`, `distanceToCurrentStepMeters`, `distanceToFinalDestinationMeters`, `timeToFinalDestinationSeconds`, arrival callbacks, and navigation state into provider-neutral models. Current SDK listeners are registered with `add(_:)`/`remove(_:)`; the retired delegate API is not used.
-
-Live instructions and mock instructions use the same `NavigationCoordinator`, threshold/cooldown policy, deduplicator, and `NotificationBandTransport`. This pipeline has an integration test with a controllable provider and notification scheduler; real Mi Fitness and band mirroring remain a physical-device verification item.
-
-Background guidance uses the current `GMSRoadSnappedLocationProviderListener`, `allowsBackgroundLocationUpdates`, `startUpdatingLocation()`, and `stopUpdatingLocation()` APIs. The target declares `UIBackgroundModes/location`. Updates are enabled only during active guidance, following Apple and Google battery guidance.
+Sygic is only an evaluated future provider. Its public iOS documentation confirms safety warnings but does not publicly guarantee motorcycle routing for Vietnam. See [SYGIC_EVALUATION.md](SYGIC_EVALUATION.md).
 
 ## Official references
 
-- Apple Xcode 26 release notes: https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes
-- Apple upload requirements: https://developer.apple.com/news/upcoming-requirements/
+- Apple MapKit: https://developer.apple.com/documentation/mapkit
+- Apple Core Location: https://developer.apple.com/documentation/corelocation
+- Apple UserNotifications: https://developer.apple.com/documentation/usernotifications
+- Apple Xcode release notes: https://developer.apple.com/documentation/xcode-release-notes
 - GitHub macOS 26 image: https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md
-- Navigation SDK overview: https://developers.google.com/maps/documentation/navigation/ios-sdk/setup-overview
-- Navigation SDK release notes: https://developers.google.com/maps/documentation/navigation/ios-sdk/release-notes
-- Places SDK setup: https://developers.google.com/maps/documentation/places/ios-sdk/config

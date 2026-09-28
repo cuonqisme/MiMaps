@@ -14,7 +14,7 @@ bash scripts/ci/test.sh
 Create an unsigned device archive that proves the Release configuration compiles:
 
 ```bash
-ARCHIVE_PATH=artifacts/release/MiBandNavigator.xcarchive \
+ARCHIVE_PATH=artifacts/release/MiMaps.xcarchive \
   bash scripts/build/archive.sh unsigned
 ```
 

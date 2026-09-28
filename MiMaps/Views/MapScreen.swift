@@ -64,7 +64,7 @@ struct MapScreen: View {
                 .padding(.trailing, 16)
                 .padding(.top, controlsTopPadding)
         }
-        .navigationTitle("MiBand Navigator")
+        .navigationTitle("MiMaps")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isSearchPresented) {
             DestinationSearchView(

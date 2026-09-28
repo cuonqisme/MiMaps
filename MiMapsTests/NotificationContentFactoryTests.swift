@@ -1,5 +1,5 @@
 import XCTest
-@testable import MiBandNavigator
+@testable import MiMaps
 
 final class NotificationContentFactoryTests: XCTestCase {
     func testCreatesSilentNavigationNotification() {
@@ -35,4 +35,3 @@ final class NotificationContentFactoryTests: XCTestCase {
         XCTAssertTrue(missing.soundEnabled)
     }
 }
-

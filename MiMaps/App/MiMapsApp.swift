@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MiBandNavigatorApp: App {
+struct MiMapsApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var environment = AppEnvironment()
 

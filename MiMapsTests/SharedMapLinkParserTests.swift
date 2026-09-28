@@ -1,5 +1,5 @@
 import XCTest
-@testable import MiBandNavigator
+@testable import MiMaps
 
 final class SharedMapLinkParserTests: XCTestCase {
     private let parser = SharedMapLinkParser()

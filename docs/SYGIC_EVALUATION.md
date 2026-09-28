@@ -26,7 +26,7 @@ Primary references:
 
 The consumer Sygic application offering a motorcycle mode does not prove that the same mode is included in every Maps SDK license. The public iOS routing guide documents car and pedestrian routing and a generic vehicle-profile API, but it does not publicly document a motorcycle route type or guarantee motorcycle coverage in Vietnam.
 
-MiBand Navigator must therefore continue to label its current motorcycle option as an automobile fallback. It must not silently present a car route as a motorcycle route.
+MiMaps must therefore continue to label its current motorcycle option as an automobile fallback. It must not silently present a car route as a motorcycle route.
 
 Primary references:
 

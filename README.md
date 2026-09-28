@@ -1,6 +1,6 @@
-# MiBand Navigator
+# MiMaps
 
-MiBand Navigator is a SwiftUI iPhone application that uses Apple MapKit for search, route calculation, live step tracking, and rerouting. Concise turn instructions are mirrored to a Xiaomi Smart Band 9 through normal iOS notifications and Mi Fitness. The app does not use proprietary Xiaomi BLE.
+MiMaps is a SwiftUI iPhone application that uses Apple MapKit for search, route calculation, live step tracking, and rerouting. Concise turn instructions are mirrored to a Xiaomi Smart Band 9 through normal iOS notifications and Mi Fitness. The app does not use proprietary Xiaomi BLE.
 
 The current MapKit build includes:
 
@@ -53,7 +53,7 @@ Latest automated status and physical-verification boundaries are recorded in [RE
 ```bash
 brew install xcodegen
 scripts/ci/bootstrap.sh
-open MiBandNavigator.xcodeproj
+open MiMaps.xcodeproj
 ```
 
 The generated `.xcodeproj` is intentionally ignored; `project.yml` is the source of truth.

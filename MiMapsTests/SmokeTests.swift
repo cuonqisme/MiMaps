@@ -1,9 +1,8 @@
 import XCTest
-@testable import MiBandNavigator
+@testable import MiMaps
 
 final class SmokeTests: XCTestCase {
     func testTestTargetLoadsApplicationModule() {
         XCTAssertTrue(true)
     }
 }
-

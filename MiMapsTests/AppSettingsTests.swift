@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import MiBandNavigator
+@testable import MiMaps
 
 @MainActor
 final class AppSettingsTests: XCTestCase {

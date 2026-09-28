@@ -10,7 +10,7 @@ Enable Navigation SDK for iOS in the same project as the key and verify API rest
 
 ## No Mi Band notification
 
-Verify iOS notification permission, Mi Fitness notification access, Bluetooth connection, and app mirroring for MiBand Navigator. Use Developer Tools to send a controlled test notification.
+Verify iOS notification permission, Mi Fitness notification access, Bluetooth connection, and app mirroring for MiMaps. Use Developer Tools to send a controlled test notification.
 
 ## Locked-screen guidance stops
 

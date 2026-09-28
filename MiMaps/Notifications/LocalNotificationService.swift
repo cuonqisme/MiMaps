@@ -36,7 +36,7 @@ enum LocalNotificationError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            "Thông báo đang bị tắt. Hãy bật thông báo cho MiBand Navigator trong Cài đặt iOS."
+            "Thông báo đang bị tắt. Hãy bật thông báo cho MiMaps trong Cài đặt iOS."
         }
     }
 }

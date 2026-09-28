@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 
 enum AppLogger {
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "MiBandNavigator"
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "MiMaps"
 
     static let app = Logger(subsystem: subsystem, category: "APP")
     static let navigation = Logger(subsystem: subsystem, category: "NAVIGATION")

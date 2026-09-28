@@ -30,7 +30,7 @@ struct BandNotificationFormatter: Sendable {
         if instruction.maneuver == .destination {
             return NavigationNotificationContent(
                 title: "\(symbol) Đã đến nơi",
-                body: normalizedRoadName(instruction.roadName) ?? "MiBand Navigator",
+                body: normalizedRoadName(instruction.roadName) ?? "MiMaps",
                 categoryIdentifier: LocalNotificationService.navigationCategoryIdentifier,
                 soundEnabled: soundEnabled
             )

@@ -33,7 +33,7 @@ On PowerShell, create base64 values without line wrapping:
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('AppleDistribution.p12')) | Set-Clipboard
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('MiBandNavigator.mobileprovision')) | Set-Clipboard
+[Convert]::ToBase64String([IO.File]::ReadAllBytes('MiMaps.mobileprovision')) | Set-Clipboard
 ```
 
 The release workflow creates a temporary keychain, imports the certificate and profile, extracts the profile name, builds, then deletes the temporary signing assets in an `always()` cleanup step.

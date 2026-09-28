@@ -7,7 +7,7 @@ struct ContentView: View {
                 .font(.system(size: 72))
                 .foregroundStyle(.blue)
 
-            Text("MiBand Navigator")
+            Text("MiMaps")
                 .font(.largeTitle.bold())
 
             Text("Điều hướng trên iPhone, chỉ dẫn ngắn gọn trên Mi Band.")

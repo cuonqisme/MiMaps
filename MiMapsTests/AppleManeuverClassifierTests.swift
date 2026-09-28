@@ -1,5 +1,5 @@
 import XCTest
-@testable import MiBandNavigator
+@testable import MiMaps
 
 final class AppleManeuverClassifierTests: XCTestCase {
     private let classifier = AppleManeuverClassifier()

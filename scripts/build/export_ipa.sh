@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-archive_path="${ARCHIVE_PATH:-artifacts/release/MiBandNavigator.xcarchive}"
+archive_path="${ARCHIVE_PATH:-artifacts/release/MiMaps.xcarchive}"
 export_path="${EXPORT_PATH:-artifacts/release/export}"
 export_method="${EXPORT_METHOD:-app-store-connect}"
 export_options_path="${EXPORT_OPTIONS_PATH:-artifacts/release/ExportOptions.plist}"

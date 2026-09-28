@@ -103,7 +103,7 @@ struct SettingsView: View {
                 NavigationLink("Pháp lý và quyền riêng tư") {
                     LegalView()
                 }
-                Text("MiBand Navigator không kết nối BLE riêng với Xiaomi Smart Band. Thông báo được chuyển tiếp bởi iOS và Mi Fitness.")
+                Text("MiMaps không kết nối BLE riêng với Xiaomi Smart Band. Thông báo được chuyển tiếp bởi iOS và Mi Fitness.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
