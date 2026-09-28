@@ -24,7 +24,8 @@ struct BandNotificationFormatter: Sendable {
             return safetyContent(
                 alert,
                 instruction: instruction,
-                soundEnabled: soundEnabled
+                soundEnabled: soundEnabled,
+                includeSpeedLimit: includeSpeedLimit
             )
         }
         let symbol = symbol(for: instruction.maneuver)
@@ -54,14 +55,13 @@ struct BandNotificationFormatter: Sendable {
     private func safetyContent(
         _ alert: NavigationSafetyAlert,
         instruction: NavigationInstruction,
-        soundEnabled: Bool
+        soundEnabled: Bool,
+        includeSpeedLimit: Bool
     ) -> NavigationNotificationContent {
         var details: [String] = []
-        if let limit = alert.speedLimitKPH ?? instruction.speedLimitKPH {
+        if includeSpeedLimit,
+           let limit = alert.speedLimitKPH ?? instruction.speedLimitKPH {
             details.append("Giới hạn \(Int(limit.rounded())) km/h")
-        }
-        if let speed = instruction.currentSpeedKPH {
-            details.append("Đang đi \(Int(speed.rounded())) km/h")
         }
         return NavigationNotificationContent(
             title: "● \(alert.kind.localizedName) \(DistanceFormatter.string(fromMeters: alert.distanceMeters))",

@@ -133,7 +133,11 @@ final class FormatterTests: XCTestCase {
         let content = BandNotificationFormatter().format(instruction)
 
         XCTAssertEqual(content.title, "● Camera tốc độ 450 m")
-        XCTAssertEqual(content.body, "Giới hạn 60 km/h • Đang đi 55 km/h")
+        XCTAssertEqual(content.body, "Giới hạn 60 km/h")
+        XCTAssertEqual(
+            BandNotificationFormatter().format(instruction, includeSpeedLimit: false).body,
+            "Chú ý phía trước"
+        )
     }
 }
 
