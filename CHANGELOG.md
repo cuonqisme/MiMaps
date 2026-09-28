@@ -17,6 +17,9 @@
 - Replaced nearby free-text queries with MapKit point-of-interest category filters and explicit location-permission/GPS handling.
 - Redesigned destination search with a persistent modern search field, richer result cards, empty/error states, and a clearer Google Maps link importer.
 - Added locally stored recent destinations and a live Apple Maps traffic overlay toggle.
+- Added a draggable, distance-sorted nearby-place result sheet with route, call, website, and share actions.
+- Replaced the obscured native compass with an accessible map heading-reset control positioned below the search and quick-category controls.
+- Documented the verified Sygic iOS safety-alert capabilities and the license/coverage checks required before integration; motorcycle routing remains an explicit MapKit automobile fallback.
 - Added live maneuver, road, distance, ETA, reroute, and arrival feed mapping.
 - Added notification threshold/cooldown/deduplication pipeline and mock navigation.
 - Added background location lifecycle and contextual permission handling.

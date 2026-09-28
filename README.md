@@ -8,14 +8,14 @@ The current MapKit build includes:
 - Car, walking, public-transit, and motorcycle-request modes. MapKit has no motorcycle transport type, so motorcycle requests visibly fall back to an automobile route.
 - Alternative routes with distance, ETA, advantages, disadvantages, toll, and highway indicators.
 - Avoid-toll and avoid-highway preferences.
-- Nearby food, fuel, parking, hospital, pharmacy, ATM, coffee, and hotel search.
+- Nearby food, fuel, parking, hospital, pharmacy, ATM, coffee, and hotel search with a draggable, distance-sorted result sheet and route/call/website/share actions.
 - Live Apple Maps traffic display and an eight-item local recent-destination history.
-- Tap-to-select Apple map places, long-press pinning, and routing to nearby results.
+- Tap-to-select Apple map places, long-press pinning, routing to nearby results, and an unobstructed heading-reset control.
 - Google Maps link import through the clipboard, including shortened `maps.app.goo.gl` links.
 - Current GPS speed on the phone and provider-neutral speed-limit/safety-camera notification models for a future licensed data provider.
 - Professional SF Symbols on the iPhone while Mi Band notifications use only the verified-safe `↑`, `←`, `→`, `↖`, `↗`, and `●` character set plus Vietnamese maneuver text.
 
-MapKit does not supply motorcycle-specific routes, speed-camera data, or a dedicated avoid-overpass option. The app never fabricates these values. A licensed provider such as TomTom can be integrated behind the existing navigation/safety models once its SDK entitlement and API key are supplied.
+MapKit does not supply motorcycle-specific routes, speed-camera data, or a dedicated avoid-overpass option. The app never fabricates these values. Sygic's iOS SDK publicly documents speed-limit, camera, incident, railway-crossing, and sharp-curve alerts, but its public routing documentation does not guarantee motorcycle routing. Integration requires a commercial Sygic SDK license/key and confirmation of motorcycle and safety-data coverage for Vietnam; see [the Sygic evaluation](docs/SYGIC_EVALUATION.md).
 
 ## Current status
 
