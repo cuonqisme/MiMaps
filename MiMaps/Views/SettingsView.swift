@@ -46,6 +46,10 @@ struct SettingsView: View {
             Section("Thông báo Mi Band") {
                 Toggle("Bật thông báo điều hướng", isOn: $settings.bandNotificationsEnabled)
                 Toggle("Âm thanh trên điện thoại", isOn: $settings.notificationSoundEnabled)
+                Toggle("Hiển thị giới hạn tốc độ", isOn: $settings.showSpeedLimit)
+                Text("Chỉ hiển thị khi nguồn dữ liệu tuyến đường cung cấp giới hạn tốc độ. Apple MapKit hiện không cung cấp dữ liệu này qua API công khai.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 LabeledContent("Quyền", value: permissionStatus.localizedDescription)
                 Button("Cho phép thông báo") {
                     Task { await requestNotificationPermission() }

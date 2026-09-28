@@ -17,7 +17,8 @@ struct BandNotificationFormatter: Sendable {
 
     func format(
         _ instruction: NavigationInstruction,
-        soundEnabled: Bool = false
+        soundEnabled: Bool = false,
+        includeSpeedLimit: Bool = true
     ) -> NavigationNotificationContent {
         if let alert = instruction.safetyAlert {
             return safetyContent(
@@ -36,9 +37,15 @@ struct BandNotificationFormatter: Sendable {
             )
         }
 
+        var body = instruction.maneuver.conciseInstruction(
+            roadName: normalizedRoadName(instruction.roadName)
+        )
+        if includeSpeedLimit, let limit = instruction.speedLimitKPH {
+            body += " · Giới hạn \(Int(limit.rounded())) km/h"
+        }
         return NavigationNotificationContent(
             title: "\(symbol) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters))",
-            body: instruction.maneuver.conciseInstruction(roadName: normalizedRoadName(instruction.roadName)),
+            body: body,
             categoryIdentifier: LocalNotificationService.navigationCategoryIdentifier,
             soundEnabled: soundEnabled
         )

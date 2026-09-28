@@ -35,19 +35,4 @@ struct NavigationInstruction: Sendable, Equatable, Hashable {
         self.speedLimitKPH = speedLimitKPH.map { max(0, $0) }
         self.safetyAlert = safetyAlert
     }
-
-    func replacingDistanceToManeuver(with distance: Double) -> NavigationInstruction {
-        NavigationInstruction(
-            maneuver: maneuver,
-            roadName: roadName,
-            distanceToManeuverMeters: distance,
-            remainingDistanceMeters: remainingDistanceMeters,
-            remainingTimeSeconds: remainingTimeSeconds,
-            stepIdentifier: stepIdentifier,
-            timestamp: timestamp,
-            currentSpeedKPH: currentSpeedKPH,
-            speedLimitKPH: speedLimitKPH,
-            safetyAlert: safetyAlert
-        )
-    }
 }

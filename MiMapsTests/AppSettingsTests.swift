@@ -14,6 +14,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(initial.travelMode, .motorcycle)
         XCTAssertEqual(initial.mapDisplayStyle, .standard)
         XCTAssertTrue(initial.showTraffic)
+        XCTAssertTrue(initial.showSpeedLimit)
         XCTAssertTrue(initial.recentDestinations.isEmpty)
         XCTAssertEqual(initial.routePreferences, .standard)
 
@@ -24,6 +25,7 @@ final class AppSettingsTests: XCTestCase {
         initial.travelMode = .transit
         initial.mapDisplayStyle = .hybrid
         initial.showTraffic = false
+        initial.showSpeedLimit = false
         initial.avoidTolls = true
         initial.avoidHighways = true
         for index in 0..<10 {
@@ -41,6 +43,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.travelMode, .transit)
         XCTAssertEqual(reloaded.mapDisplayStyle, .hybrid)
         XCTAssertFalse(reloaded.showTraffic)
+        XCTAssertFalse(reloaded.showSpeedLimit)
         XCTAssertEqual(reloaded.recentDestinations.count, 8)
         XCTAssertEqual(reloaded.recentDestinations.first?.displayName, "Điểm 9")
         XCTAssertEqual(

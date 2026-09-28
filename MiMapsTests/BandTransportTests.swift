@@ -45,6 +45,28 @@ final class BandTransportTests: XCTestCase {
         XCTAssertTrue(scheduler.contents.isEmpty)
     }
 
+    func testTransportHonorsSpeedLimitToggle() async throws {
+        let scheduler = BandSchedulerSpy()
+        let transport = NotificationBandTransport(
+            scheduler: scheduler,
+            speedLimitEnabled: { false }
+        )
+        let value = NavigationInstruction(
+            maneuver: .right,
+            roadName: "Trần Phú",
+            distanceToManeuverMeters: 143,
+            remainingDistanceMeters: 1_000,
+            remainingTimeSeconds: 120,
+            stepIdentifier: "limit",
+            speedLimitKPH: 60
+        )
+
+        try await transport.start()
+        try await transport.send(value)
+
+        XCTAssertEqual(scheduler.contents.first?.body, "Rẽ phải · Trần Phú")
+    }
+
     func testDeduplicatorResetsForNewStep() {
         var deduplicator = BandInstructionDeduplicator()
         let first = instruction(step: "one", distance: 80)

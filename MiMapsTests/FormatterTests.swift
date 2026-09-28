@@ -90,6 +90,28 @@ final class FormatterTests: XCTestCase {
         )
     }
 
+    func testBandFormatterIncludesAvailableSpeedLimitWhenEnabled() {
+        let instruction = NavigationInstruction(
+            maneuver: .right,
+            roadName: "Trần Phú",
+            distanceToManeuverMeters: 143,
+            remainingDistanceMeters: 2_000,
+            remainingTimeSeconds: 300,
+            stepIdentifier: "limit",
+            currentSpeedKPH: 41.6,
+            speedLimitKPH: 60
+        )
+
+        XCTAssertEqual(
+            BandNotificationFormatter().format(instruction).body,
+            "Rẽ phải · Trần Phú · Giới hạn 60 km/h"
+        )
+        XCTAssertEqual(
+            BandNotificationFormatter().format(instruction, includeSpeedLimit: false).body,
+            "Rẽ phải · Trần Phú"
+        )
+    }
+
     func testBandFormatterFormatsSafetyCameraAlert() {
         let instruction = NavigationInstruction(
             maneuver: .straight,

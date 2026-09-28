@@ -149,10 +149,11 @@ struct MapScreen: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Đưa bản đồ về hướng Bắc")
 
-            if let speed = navigationProvider.lastSpeedMetersPerSecond,
+            if settings.showSpeedLimit,
+               let speedLimit = navigationCoordinator.currentInstruction?.speedLimitKPH,
                isActivelyNavigating {
                 VStack(spacing: 0) {
-                    Text("\(Int((speed * 3.6).rounded()))")
+                    Text("\(Int(speedLimit.rounded()))")
                         .font(.headline.monospacedDigit())
                     Text("km/h")
                         .font(.caption2)
@@ -161,7 +162,7 @@ struct MapScreen: View {
                 .frame(width: 52, height: 52)
                 .background(.regularMaterial, in: Circle())
                 .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
-                .accessibilityLabel("Tốc độ hiện tại \(Int((speed * 3.6).rounded())) ki-lô-mét một giờ")
+                .accessibilityLabel("Giới hạn tốc độ \(Int(speedLimit.rounded())) ki-lô-mét một giờ")
             }
         }
     }

@@ -53,6 +53,15 @@ struct AppleMapView: UIViewRepresentable {
             mapView.showsTraffic = showsTraffic
         }
 
+        let isActivelyNavigating = navigationProvider.currentState == .navigating
+            || navigationProvider.currentState == .rerouting
+        if isActivelyNavigating != context.coordinator.wasActivelyNavigating {
+            context.coordinator.wasActivelyNavigating = isActivelyNavigating
+            if isActivelyNavigating {
+                mapView.setUserTrackingMode(.followWithHeading, animated: true)
+            }
+        }
+
         if context.coordinator.recenterRequest != recenterRequest {
             context.coordinator.recenterRequest = recenterRequest
             mapView.setUserTrackingMode(.followWithHeading, animated: true)
@@ -60,6 +69,7 @@ struct AppleMapView: UIViewRepresentable {
 
         if context.coordinator.resetHeadingRequest != resetHeadingRequest {
             context.coordinator.resetHeadingRequest = resetHeadingRequest
+            mapView.setUserTrackingMode(.none, animated: false)
             let camera = MKMapCamera(
                 lookingAtCenter: mapView.camera.centerCoordinate,
                 fromDistance: mapView.camera.centerCoordinateDistance,
@@ -67,6 +77,7 @@ struct AppleMapView: UIViewRepresentable {
                 heading: 0
             )
             mapView.setCamera(camera, animated: true)
+            mapView.setUserTrackingMode(.follow, animated: true)
         }
 
         let annotationIDs = Set(nearbyDestinations.map(\.id) + [destination?.id].compactMap { $0 })
@@ -94,18 +105,13 @@ struct AppleMapView: UIViewRepresentable {
                 let alternatePolylines = navigationProvider.routePolylines.filter { $0 !== polyline }
                 mapView.addOverlays(alternatePolylines)
                 mapView.addOverlay(polyline)
-                mapView.setVisibleMapRect(
-                    polyline.boundingMapRect,
-                    edgePadding: UIEdgeInsets(top: 150, left: 40, bottom: 260, right: 40),
-                    animated: true
-                )
-            }
-        }
-
-        if navigationProvider.currentState == .navigating
-            || navigationProvider.currentState == .rerouting {
-            if mapView.userTrackingMode != .followWithHeading {
-                mapView.setUserTrackingMode(.followWithHeading, animated: true)
+                if !isActivelyNavigating {
+                    mapView.setVisibleMapRect(
+                        polyline.boundingMapRect,
+                        edgePadding: UIEdgeInsets(top: 150, left: 40, bottom: 260, right: 40),
+                        animated: true
+                    )
+                }
             }
         }
     }
@@ -116,6 +122,7 @@ struct AppleMapView: UIViewRepresentable {
         var routeRevision = -1
         var recenterRequest = 0
         var resetHeadingRequest = 0
+        var wasActivelyNavigating = false
         var hasCenteredInitialLocation = false
         var selectedPolyline: MKPolyline?
         var onUserLocationChange: (CLLocationCoordinate2D) -> Void

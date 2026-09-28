@@ -121,13 +121,12 @@ struct BandNotificationPolicy: Sendable {
         }
 
         let batchedThresholds = pendingThresholds.sorted(by: >)
-        let displayThreshold = batchedThresholds.min() ?? Int(current.rounded())
         firedThresholds.formUnion(pendingThresholds)
         pendingThresholds.removeAll(keepingCapacity: true)
         lastNotificationTimestamp = instruction.timestamp
 
         return BandNotificationDecision(
-            notification: instruction.replacingDistanceToManeuver(with: Double(displayThreshold)),
+            notification: instruction,
             crossedThresholds: batchedThresholds,
             reason: .thresholdCrossed
         )

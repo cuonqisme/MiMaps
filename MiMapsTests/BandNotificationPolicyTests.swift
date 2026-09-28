@@ -9,7 +9,7 @@ final class BandNotificationPolicyTests: XCTestCase {
         let decision = policy.evaluate(instruction(distance: 499, time: 3))
 
         XCTAssertEqual(decision.crossedThresholds, [500])
-        XCTAssertEqual(decision.notification?.distanceToManeuverMeters, 500)
+        XCTAssertEqual(decision.notification?.distanceToManeuverMeters, 499)
     }
 
     func test501To480Crosses500() {
@@ -26,7 +26,7 @@ final class BandNotificationPolicyTests: XCTestCase {
         let decision = policy.evaluate(instruction(distance: 199, time: 3))
 
         XCTAssertEqual(decision.crossedThresholds, [500, 200])
-        XCTAssertEqual(decision.notification?.distanceToManeuverMeters, 200)
+        XCTAssertEqual(decision.notification?.distanceToManeuverMeters, 199)
         XCTAssertEqual(policy.firedThresholds, [500, 200])
     }
 
@@ -82,7 +82,7 @@ final class BandNotificationPolicyTests: XCTestCase {
         XCTAssertEqual(deferred.reason, .cooldown)
         XCTAssertNil(deferred.notification)
         XCTAssertEqual(deferred.crossedThresholds, [200])
-        XCTAssertEqual(delivered.notification?.distanceToManeuverMeters, 200)
+        XCTAssertEqual(delivered.notification?.distanceToManeuverMeters, 190)
         XCTAssertTrue(policy.pendingThresholds.isEmpty)
     }
 
@@ -104,9 +104,9 @@ final class BandNotificationPolicyTests: XCTestCase {
         let at450 = policy.evaluate(instruction(distance: 450, step: "one", time: 0))
         let at150 = policy.evaluate(instruction(distance: 150, step: "two", time: 1))
 
-        XCTAssertEqual(at450.notification?.distanceToManeuverMeters, 500)
+        XCTAssertEqual(at450.notification?.distanceToManeuverMeters, 450)
         XCTAssertEqual(at450.crossedThresholds, [500])
-        XCTAssertEqual(at150.notification?.distanceToManeuverMeters, 200)
+        XCTAssertEqual(at150.notification?.distanceToManeuverMeters, 150)
         XCTAssertEqual(at150.crossedThresholds, [500, 200])
     }
 
