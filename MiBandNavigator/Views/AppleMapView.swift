@@ -8,6 +8,7 @@ struct AppleMapView: UIViewRepresentable {
     let displayStyle: MapDisplayStyle
     let showsTraffic: Bool
     let recenterRequest: Int
+    let resetHeadingRequest: Int
     let onUserLocationChange: (CLLocationCoordinate2D) -> Void
     let onDestinationSelected: (Destination) -> Void
 
@@ -22,7 +23,7 @@ struct AppleMapView: UIViewRepresentable {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
         mapView.preferredConfiguration = MKStandardMapConfiguration(elevationStyle: .flat)
-        mapView.showsCompass = true
+        mapView.showsCompass = false
         mapView.showsUserLocation = true
         mapView.selectableMapFeatures = [.pointsOfInterest]
         mapView.mapType = displayStyle.mapType
@@ -55,6 +56,17 @@ struct AppleMapView: UIViewRepresentable {
         if context.coordinator.recenterRequest != recenterRequest {
             context.coordinator.recenterRequest = recenterRequest
             mapView.setUserTrackingMode(.followWithHeading, animated: true)
+        }
+
+        if context.coordinator.resetHeadingRequest != resetHeadingRequest {
+            context.coordinator.resetHeadingRequest = resetHeadingRequest
+            let camera = MKMapCamera(
+                lookingAtCenter: mapView.camera.centerCoordinate,
+                fromDistance: mapView.camera.centerCoordinateDistance,
+                pitch: 0,
+                heading: 0
+            )
+            mapView.setCamera(camera, animated: true)
         }
 
         let annotationIDs = Set(nearbyDestinations.map(\.id) + [destination?.id].compactMap { $0 })
@@ -103,6 +115,7 @@ struct AppleMapView: UIViewRepresentable {
         var annotationIDs: Set<UUID> = []
         var routeRevision = -1
         var recenterRequest = 0
+        var resetHeadingRequest = 0
         var hasCenteredInitialLocation = false
         var selectedPolyline: MKPolyline?
         var onUserLocationChange: (CLLocationCoordinate2D) -> Void

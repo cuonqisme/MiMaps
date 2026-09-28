@@ -66,7 +66,7 @@ final class ApplePlacesSearchService: PlacesSearching {
         do {
             let response = try await search.start()
             guard activeSearch === search else { throw CancellationError() }
-            return response.mapItems.prefix(30).compactMap { item in
+            let destinations = response.mapItems.compactMap { item -> Destination? in
                 let coordinate = coordinate(for: item)
                 guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
                 let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,10 +79,20 @@ final class ApplePlacesSearchService: PlacesSearching {
                     ),
                     displayName: name?.isEmpty == false ? name ?? category.localizedName : category.localizedName,
                     formattedAddress: formattedAddress(for: item),
+                    phoneNumber: item.phoneNumber,
+                    websiteURL: item.url,
                     latitude: coordinate.latitude,
                     longitude: coordinate.longitude
                 )
             }
+            let origin = CLLocation(latitude: center.latitude, longitude: center.longitude)
+            return Array(
+                destinations.sorted { lhs, rhs in
+                    let left = CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
+                    let right = CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)
+                    return origin.distance(from: left) < origin.distance(from: right)
+                }.prefix(30)
+            )
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -145,6 +155,8 @@ final class ApplePlacesSearchService: PlacesSearching {
             placeID: suggestion.placeID,
             displayName: suggestion.primaryText,
             formattedAddress: suggestion.secondaryText,
+            phoneNumber: item.phoneNumber,
+            websiteURL: item.url,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude
         )

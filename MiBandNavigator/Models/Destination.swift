@@ -5,6 +5,8 @@ struct Destination: Sendable, Equatable, Hashable, Codable, Identifiable {
     let placeID: String?
     let displayName: String
     let formattedAddress: String?
+    let phoneNumber: String?
+    let websiteURL: URL?
     let latitude: Double
     let longitude: Double
 
@@ -13,6 +15,8 @@ struct Destination: Sendable, Equatable, Hashable, Codable, Identifiable {
         placeID: String? = nil,
         displayName: String,
         formattedAddress: String? = nil,
+        phoneNumber: String? = nil,
+        websiteURL: URL? = nil,
         latitude: Double,
         longitude: Double
     ) {
@@ -20,8 +24,9 @@ struct Destination: Sendable, Equatable, Hashable, Codable, Identifiable {
         self.placeID = placeID
         self.displayName = displayName
         self.formattedAddress = formattedAddress
+        self.phoneNumber = phoneNumber
+        self.websiteURL = websiteURL
         self.latitude = latitude
         self.longitude = longitude
     }
 }
-

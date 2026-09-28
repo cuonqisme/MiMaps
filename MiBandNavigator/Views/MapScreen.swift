@@ -14,6 +14,7 @@ struct MapScreen: View {
     @State private var navigationWarning: String?
     @State private var shouldOfferSettings = false
     @State private var recenterRequest = 0
+    @State private var resetHeadingRequest = 0
     @State private var currentUserCoordinate: CLLocationCoordinate2D?
     @State private var nearbyDestinations: [Destination] = []
     @State private var selectedNearbyCategory: NearbyPlaceCategory?
@@ -36,6 +37,7 @@ struct MapScreen: View {
             displayStyle: settings.mapDisplayStyle,
             showsTraffic: settings.showTraffic,
             recenterRequest: recenterRequest,
+            resetHeadingRequest: resetHeadingRequest,
             onUserLocationChange: { coordinate in
                 currentUserCoordinate = coordinate
                 environment.placesSearchService.updateSearchCenter(coordinate)
@@ -73,6 +75,19 @@ struct MapScreen: View {
             ) { destination in
                 selectDestination(destination)
             }
+        }
+        .sheet(item: $selectedNearbyCategory, onDismiss: clearNearbySearch) { category in
+            NearbyPlacesSheet(
+                category: category,
+                destinations: nearbyDestinations,
+                userCoordinate: currentUserCoordinate,
+                isLoading: isSearchingNearby,
+                errorMessage: nearbyError,
+                onSelect: { destination in
+                    selectedNearbyCategory = nil
+                    selectDestination(destination)
+                }
+            )
         }
     }
 
@@ -122,6 +137,14 @@ struct MapScreen: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Về vị trí hiện tại")
+
+            Button {
+                resetHeadingRequest += 1
+            } label: {
+                mapControlIcon("safari.fill")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Đưa bản đồ về hướng Bắc")
 
             if let speed = navigationProvider.lastSpeedMetersPerSecond,
                isActivelyNavigating {
@@ -357,8 +380,8 @@ struct MapScreen: View {
         guard let center = await searchCenterForNearbyPlaces() else {
             return
         }
-        selectedNearbyCategory = category
         isSearchingNearby = true
+        selectedNearbyCategory = category
         defer { isSearchingNearby = false }
         do {
             nearbyDestinations = try await environment.placesSearchService.searchNearby(
@@ -372,6 +395,12 @@ struct MapScreen: View {
             nearbyDestinations = []
             nearbyError = error.localizedDescription
         }
+    }
+
+    private func clearNearbySearch() {
+        nearbyDestinations = []
+        nearbyError = nil
+        isSearchingNearby = false
     }
 
     private func searchCenterForNearbyPlaces() async -> CLLocationCoordinate2D? {
