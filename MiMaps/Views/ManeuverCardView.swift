@@ -48,8 +48,6 @@ struct ManeuverCardView: View {
     }
 
     private var roadText: String {
-        instruction.roadName?.isEmpty == false
-            ? instruction.roadName ?? ""
-            : "Tiếp tục theo tuyến đường"
+        instruction.maneuver.conciseInstruction(roadName: instruction.roadName)
     }
 }

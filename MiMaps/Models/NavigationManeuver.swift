@@ -44,6 +44,33 @@ enum ManeuverSymbolKey: String, Sendable, CaseIterable, Hashable {
 }
 
 extension NavigationManeuver {
+    func conciseInstruction(roadName: String?) -> String {
+        let action: String = switch self {
+        case .straight: "Đi thẳng"
+        case .slightLeft: "Lệch trái"
+        case .left: "Rẽ trái"
+        case .sharpLeft: "Rẽ gấp trái"
+        case .slightRight: "Lệch phải"
+        case .right: "Rẽ phải"
+        case .sharpRight: "Rẽ gấp phải"
+        case .uTurnLeft: "Quay đầu trái"
+        case .uTurnRight: "Quay đầu phải"
+        case .mergeLeft: "Nhập làn trái"
+        case .mergeRight: "Nhập làn phải"
+        case .forkLeft: "Theo nhánh trái"
+        case .forkRight: "Theo nhánh phải"
+        case .rampLeft: "Ra lối trái"
+        case .rampRight: "Ra lối phải"
+        case .roundabout: "Vào vòng xuyến"
+        case let .roundaboutExit(exit): exit.map { "Vòng xuyến · lối ra \($0)" } ?? "Ra khỏi vòng xuyến"
+        case .destination: "Đã đến nơi"
+        case .unknown: "Tiếp tục theo tuyến"
+        }
+        guard let roadName = roadName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !roadName.isEmpty else { return action }
+        return "\(action) · \(String(roadName.prefix(48)))"
+    }
+
     var symbolKey: ManeuverSymbolKey {
         switch self {
         case .straight: .straight

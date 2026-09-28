@@ -52,6 +52,7 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     private let stateEvents = NavigationEventStream<NavigationState>()
     private let instructionEvents = NavigationEventStream<NavigationInstruction>()
     private let classifier = AppleManeuverClassifier()
+    private let instructionParser = AppleInstructionParser()
     private let locationManager = CLLocationManager()
     private let preferencesProvider: @MainActor () -> RoutePreferences
     private var locationContinuation: CheckedContinuation<CLLocation, Error>?
@@ -318,10 +319,11 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
             : 0
         let text = nextStep.instructions.isEmpty ? "Tiếp tục theo tuyến đường" : nextStep.instructions
         lastInstructionText = text
+        let maneuver = classifier.classify(text)
         emit(
             NavigationInstruction(
-                maneuver: classifier.classify(text),
-                roadName: text,
+                maneuver: maneuver,
+                roadName: instructionParser.conciseRoadName(from: text),
                 distanceToManeuverMeters: maneuverDistance,
                 remainingDistanceMeters: remainingDistance,
                 remainingTimeSeconds: remainingTime,

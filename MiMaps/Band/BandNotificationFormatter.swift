@@ -38,7 +38,7 @@ struct BandNotificationFormatter: Sendable {
 
         return NavigationNotificationContent(
             title: "\(symbol) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters))",
-            body: bodyWithSpeed(for: instruction),
+            body: instruction.maneuver.conciseInstruction(roadName: normalizedRoadName(instruction.roadName)),
             categoryIdentifier: LocalNotificationService.navigationCategoryIdentifier,
             soundEnabled: soundEnabled
         )
@@ -64,17 +64,6 @@ struct BandNotificationFormatter: Sendable {
         )
     }
 
-    private func bodyWithSpeed(for instruction: NavigationInstruction) -> String {
-        var details = [body(for: instruction)]
-        if let limit = instruction.speedLimitKPH {
-            details.append("Giới hạn \(Int(limit.rounded())) km/h")
-        }
-        if let speed = instruction.currentSpeedKPH {
-            details.append("Tốc độ \(Int(speed.rounded())) km/h")
-        }
-        return details.joined(separator: " • ")
-    }
-
     func symbol(for maneuver: NavigationManeuver) -> String {
         if let override = symbols.overrides[maneuver.symbolKey], !override.isEmpty {
             return override
@@ -92,25 +81,6 @@ struct BandNotificationFormatter: Sendable {
         case .destination: "●"
         case .unknown: "↑"
         }
-    }
-
-    private func body(for instruction: NavigationInstruction) -> String {
-        let roadName = normalizedRoadName(instruction.roadName)
-        if case let .roundaboutExit(exit) = instruction.maneuver, let exit {
-            return roadName.map { "Lối ra \(exit) • \($0)" } ?? "Lối ra \(exit)"
-        }
-        let fallbackLabel: String? = switch instruction.maneuver {
-        case .sharpLeft: "Rẽ gấp trái"
-        case .sharpRight: "Rẽ gấp phải"
-        case .uTurnLeft: "Quay đầu trái"
-        case .uTurnRight: "Quay đầu phải"
-        case .roundabout: "Vòng xuyến"
-        default: nil
-        }
-        if let fallbackLabel, let roadName {
-            return "\(fallbackLabel) • \(roadName)"
-        }
-        return fallbackLabel ?? roadName ?? "Tiếp tục theo tuyến đường"
     }
 
     private func normalizedRoadName(_ roadName: String?) -> String? {

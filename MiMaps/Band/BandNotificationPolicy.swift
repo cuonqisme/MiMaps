@@ -9,6 +9,7 @@ struct BandNotificationDecision: Sendable, Equatable {
         case duplicateArrival
         case safetyAlert
         case duplicateSafetyAlert
+        case nonActionableManeuver
     }
 
     let notification: NavigationInstruction?
@@ -77,6 +78,15 @@ struct BandNotificationPolicy: Sendable {
                 notification: instruction,
                 crossedThresholds: [],
                 reason: .arrival
+            )
+        }
+
+        if instruction.maneuver == .straight || instruction.maneuver == .unknown {
+            previousDistanceMeters = instruction.distanceToManeuverMeters
+            return BandNotificationDecision(
+                notification: nil,
+                crossedThresholds: [],
+                reason: .nonActionableManeuver
             )
         }
 

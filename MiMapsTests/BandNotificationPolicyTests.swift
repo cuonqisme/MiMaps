@@ -123,6 +123,19 @@ final class BandNotificationPolicyTests: XCTestCase {
         XCTAssertEqual(policy.evaluate(item).reason, .duplicateSafetyAlert)
     }
 
+    func testStraightAndUnknownInstructionsDoNotNotify() {
+        var policy = BandNotificationPolicy()
+
+        XCTAssertEqual(
+            policy.evaluate(instruction(distance: 100, maneuver: .straight, time: 0)).reason,
+            .nonActionableManeuver
+        )
+        XCTAssertEqual(
+            policy.evaluate(instruction(distance: 20, maneuver: .unknown, step: "unknown", time: 1)).reason,
+            .nonActionableManeuver
+        )
+    }
+
     private func instruction(
         distance: Double,
         maneuver: NavigationManeuver = .right,

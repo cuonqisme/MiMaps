@@ -26,7 +26,7 @@ final class FormatterTests: XCTestCase {
         let content = formatter.format(instruction)
 
         XCTAssertEqual(content.title, "→ 120 m")
-        XCTAssertEqual(content.body, "Rẽ gấp phải • Trần Phú")
+        XCTAssertEqual(content.body, "Rẽ gấp phải · Trần Phú")
         XCTAssertFalse(content.soundEnabled)
     }
 
@@ -37,7 +37,7 @@ final class FormatterTests: XCTestCase {
         )
 
         XCTAssertEqual(content.title, "↑ 200 m")
-        XCTAssertEqual(content.body, "Lối ra 2")
+        XCTAssertEqual(content.body, "Vòng xuyến · lối ra 2")
     }
 
     func testBandFormatterHandlesUTurnUnknownAndMissingRoad() {
@@ -51,11 +51,11 @@ final class FormatterTests: XCTestCase {
         XCTAssertEqual(formatter.symbol(for: .unknown), "↑")
         XCTAssertEqual(
             formatter.format(makeInstruction(maneuver: .uTurnLeft, roadName: "Trần Phú", distance: 80)).body,
-            "Quay đầu trái • Trần Phú"
+            "Quay đầu trái · Trần Phú"
         )
         XCTAssertEqual(
             formatter.format(makeInstruction(maneuver: .unknown, roadName: " ", distance: 80)).body,
-            "Tiếp tục theo tuyến đường"
+            "Tiếp tục theo tuyến"
         )
     }
 
@@ -73,7 +73,7 @@ final class FormatterTests: XCTestCase {
         )
     }
 
-    func testBandFormatterIncludesCurrentSpeed() {
+    func testBandFormatterOmitsSpeedFromTurnInstruction() {
         let instruction = NavigationInstruction(
             maneuver: .right,
             roadName: "Trần Phú",
@@ -86,7 +86,7 @@ final class FormatterTests: XCTestCase {
 
         XCTAssertEqual(
             BandNotificationFormatter().format(instruction).body,
-            "Trần Phú • Tốc độ 42 km/h"
+            "Rẽ phải · Trần Phú"
         )
     }
 
