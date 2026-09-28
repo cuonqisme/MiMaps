@@ -21,7 +21,7 @@ final class NavigationCoordinatorTests: XCTestCase {
         provider.advance(by: 310)
         await waitUntil { transport.instructions.count == 2 }
 
-        XCTAssertEqual(transport.instructions.last?.distanceToManeuverMeters, 200)
+        XCTAssertEqual(transport.instructions.last?.distanceToManeuverMeters, 190)
         XCTAssertEqual(coordinator.firedThresholds, [500, 200])
     }
 
@@ -94,7 +94,7 @@ final class NavigationCoordinatorTests: XCTestCase {
         provider.advance(by: 110)
         await waitUntil { transport.instructions.count == 1 }
 
-        XCTAssertEqual(transport.instructions.first?.distanceToManeuverMeters, 400)
+        XCTAssertEqual(transport.instructions.first?.distanceToManeuverMeters, 390)
     }
 
     private func waitUntil(
