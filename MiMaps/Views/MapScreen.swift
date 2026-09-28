@@ -86,6 +86,9 @@ struct MapScreen: View {
                 onSelect: { destination in
                     selectedNearbyCategory = nil
                     selectDestination(destination)
+                },
+                onRetry: {
+                    Task { await loadNearbyCategory(category) }
                 }
             )
         }
@@ -377,18 +380,23 @@ struct MapScreen: View {
             nearbyError = nil
             return
         }
-        guard let center = await searchCenterForNearbyPlaces() else {
-            return
-        }
-        isSearchingNearby = true
         selectedNearbyCategory = category
+        await loadNearbyCategory(category)
+    }
+
+    private func loadNearbyCategory(_ category: NearbyPlaceCategory) async {
+        nearbyDestinations = []
+        nearbyError = nil
+        guard let center = await searchCenterForNearbyPlaces() else { return }
+
+        isSearchingNearby = true
         defer { isSearchingNearby = false }
         do {
             nearbyDestinations = try await environment.placesSearchService.searchNearby(
                 category: category,
                 center: center
             )
-            nearbyError = nearbyDestinations.isEmpty ? "Không tìm thấy địa điểm phù hợp gần đây." : nil
+            nearbyError = nil
         } catch is CancellationError {
             return
         } catch {

@@ -11,6 +11,7 @@ struct NearbyPlacesSheet: View {
     let isLoading: Bool
     let errorMessage: String?
     let onSelect: (Destination) -> Void
+    let onRetry: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -29,8 +30,12 @@ struct NearbyPlacesSheet: View {
                             .foregroundStyle(.orange)
                         Text(errorMessage)
                             .multilineTextAlignment(.center)
-                        Button("Đóng") { dismiss() }
-                            .buttonStyle(.borderedProminent)
+                        HStack {
+                            Button("Đóng") { dismiss() }
+                                .buttonStyle(.bordered)
+                            Button("Thử lại") { onRetry() }
+                                .buttonStyle(.borderedProminent)
+                        }
                     }
                     .padding(24)
                 } else if destinations.isEmpty {
@@ -44,6 +49,8 @@ struct NearbyPlacesSheet: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                        Button("Tìm lại") { onRetry() }
+                            .buttonStyle(.borderedProminent)
                     }
                     .padding(24)
                 } else {

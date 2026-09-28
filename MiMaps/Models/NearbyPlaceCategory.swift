@@ -38,6 +38,19 @@ enum NearbyPlaceCategory: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    var fallbackSearchQueries: [String] {
+        switch self {
+        case .food: ["nhà hàng", "restaurant"]
+        case .fuel: ["trạm xăng", "gas station"]
+        case .parking: ["bãi đỗ xe", "parking"]
+        case .hospital: ["bệnh viện", "hospital"]
+        case .pharmacy: ["nhà thuốc", "pharmacy"]
+        case .atm: ["ATM", "bank"]
+        case .coffee: ["quán cà phê", "coffee shop"]
+        case .hotel: ["khách sạn", "hotel"]
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .food: "fork.knife"

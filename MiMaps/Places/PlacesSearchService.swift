@@ -56,48 +56,53 @@ final class ApplePlacesSearchService: PlacesSearching {
         center: CLLocationCoordinate2D
     ) async throws -> [Destination] {
         guard CLLocationCoordinate2DIsValid(center) else { return [] }
-        activeSearch?.cancel()
-        let request = MKLocalPointsOfInterestRequest(center: center, radius: 15_000)
-        request.pointOfInterestFilter = MKPointOfInterestFilter(
+        var mapItems: [MKMapItem] = []
+        var lastServiceError: Error?
+
+        let pointOfInterestRequest = MKLocalPointsOfInterestRequest(center: center, radius: 20_000)
+        pointOfInterestRequest.pointOfInterestFilter = MKPointOfInterestFilter(
             including: category.pointOfInterestCategories
         )
-        let search = MKLocalSearch(request: request)
-        activeSearch = search
+
         do {
-            let response = try await search.start()
-            guard activeSearch === search else { throw CancellationError() }
-            let destinations = response.mapItems.compactMap { item -> Destination? in
-                let coordinate = coordinate(for: item)
-                guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
-                let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-                return Destination(
-                    placeID: String(
-                        format: "apple-nearby:%.7f,%.7f",
-                        locale: Locale(identifier: "en_US_POSIX"),
-                        coordinate.latitude,
-                        coordinate.longitude
-                    ),
-                    displayName: name?.isEmpty == false ? name ?? category.localizedName : category.localizedName,
-                    formattedAddress: formattedAddress(for: item),
-                    phoneNumber: item.phoneNumber,
-                    websiteURL: item.url,
-                    latitude: coordinate.latitude,
-                    longitude: coordinate.longitude
-                )
-            }
-            let origin = CLLocation(latitude: center.latitude, longitude: center.longitude)
-            return Array(
-                destinations.sorted { lhs, rhs in
-                    let left = CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
-                    let right = CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)
-                    return origin.distance(from: left) < origin.distance(from: right)
-                }.prefix(30)
-            )
+            mapItems = try await execute(MKLocalSearch(request: pointOfInterestRequest))
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw PlacesSearchError.searchFailed(error.localizedDescription)
+            if !isNoResultsError(error) { lastServiceError = error }
         }
+
+        if mapItems.isEmpty {
+            for query in category.fallbackSearchQueries {
+                let request = MKLocalSearch.Request()
+                request.naturalLanguageQuery = query
+                request.resultTypes = .pointOfInterest
+                request.region = MKCoordinateRegion(
+                    center: center,
+                    latitudinalMeters: 60_000,
+                    longitudinalMeters: 60_000
+                )
+
+                do {
+                    mapItems.append(contentsOf: try await execute(MKLocalSearch(request: request)))
+                    if !mapItems.isEmpty { break }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    if !isNoResultsError(error) { lastServiceError = error }
+                }
+            }
+        }
+
+        let destinations = nearbyDestinations(
+            from: mapItems,
+            category: category,
+            center: center
+        )
+        if destinations.isEmpty, let lastServiceError {
+            throw PlacesSearchError.searchFailed(userFacingMessage(for: lastServiceError))
+        }
+        return destinations
     }
 
     func autocomplete(query: String) async throws -> [DestinationSuggestion] {
@@ -166,6 +171,99 @@ final class ApplePlacesSearchService: PlacesSearching {
         activeSearch?.cancel()
         activeSearch = nil
         cachedItems.removeAll(keepingCapacity: false)
+    }
+
+    private func execute(_ search: MKLocalSearch) async throws -> [MKMapItem] {
+        activeSearch?.cancel()
+        activeSearch = search
+        do {
+            let response = try await search.start()
+            guard activeSearch === search else { throw CancellationError() }
+            return response.mapItems
+        } catch {
+            guard activeSearch === search else { throw CancellationError() }
+            throw error
+        }
+    }
+
+    private func nearbyDestinations(
+        from mapItems: [MKMapItem],
+        category: NearbyPlaceCategory,
+        center: CLLocationCoordinate2D
+    ) -> [Destination] {
+        let origin = CLLocation(latitude: center.latitude, longitude: center.longitude)
+        var seen = Set<String>()
+
+        let destinations = mapItems.compactMap { item -> Destination? in
+            let coordinate = coordinate(for: item)
+            guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
+            let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            guard origin.distance(from: location) <= 60_000 else { return nil }
+
+            let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let displayName = name?.isEmpty == false ? name ?? category.localizedName : category.localizedName
+            let deduplicationKey = String(
+                format: "%.5f:%.5f:%@",
+                locale: Locale(identifier: "en_US_POSIX"),
+                coordinate.latitude,
+                coordinate.longitude,
+                displayName.lowercased()
+            )
+            guard seen.insert(deduplicationKey).inserted else { return nil }
+
+            return Destination(
+                placeID: String(
+                    format: "apple-nearby:%.7f,%.7f",
+                    locale: Locale(identifier: "en_US_POSIX"),
+                    coordinate.latitude,
+                    coordinate.longitude
+                ),
+                displayName: displayName,
+                formattedAddress: formattedAddress(for: item),
+                phoneNumber: item.phoneNumber,
+                websiteURL: item.url,
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude
+            )
+        }
+
+        return Array(
+            destinations.sorted { lhs, rhs in
+                let left = CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
+                let right = CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)
+                return origin.distance(from: left) < origin.distance(from: right)
+            }.prefix(30)
+        )
+    }
+
+    private func isNoResultsError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == "MKErrorDomain"
+            && nsError.code >= 0
+            && UInt(nsError.code) == MKError.Code.placemarkNotFound.rawValue
+    }
+
+    private func userFacingMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        guard nsError.domain == "MKErrorDomain" else {
+            return "Không thể kết nối dịch vụ bản đồ. Hãy kiểm tra mạng và thử lại."
+        }
+
+        guard nsError.code >= 0,
+              let code = MKError.Code(rawValue: UInt(nsError.code)) else {
+            return "Không thể tải địa điểm từ Apple Maps. Hãy kiểm tra mạng và thử lại."
+        }
+
+        switch code {
+        case .loadingThrottled:
+            return "Apple Maps đang giới hạn yêu cầu. Hãy đợi một lát rồi thử lại."
+        case .serverFailure:
+            return "Dịch vụ Apple Maps đang tạm thời không phản hồi. Hãy thử lại sau."
+        case .placemarkNotFound:
+            return "Không tìm thấy địa điểm phù hợp gần đây."
+        default:
+            return "Không thể tải địa điểm từ Apple Maps. Hãy kiểm tra mạng và thử lại."
+        }
     }
 
     private func coordinate(for item: MKMapItem) -> CLLocationCoordinate2D {

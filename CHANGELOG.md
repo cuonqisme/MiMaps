@@ -1,5 +1,7 @@
 # Changelog
 
+- Fixed nearby-category searches that surfaced `MKErrorDomain error 4`: a missing MapKit POI placemark now triggers Vietnamese/English keyword fallbacks across a wider nearby region, empty results no longer appear as technical errors, and the sheet provides retry actions.
+
 Application/project rename in this release: MiMaps replaces the former product name across the user interface, Xcode project, schemes, test module, archives, and distribution artifacts. The provisioned bundle identifier is retained for install compatibility.
 
 ## 0.1.0 — in development
