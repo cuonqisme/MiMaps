@@ -29,13 +29,15 @@ final class AppEnvironment: ObservableObject {
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },
             soundEnabled: { settings.notificationSoundEnabled },
-            speedLimitEnabled: { settings.showSpeedLimit }
+            speedLimitEnabled: { settings.showSpeedLimit },
+            displayStyle: { settings.bandDisplayStyle }
         )
         let liveBandTransport = NotificationBandTransport(
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },
             soundEnabled: { settings.notificationSoundEnabled },
-            speedLimitEnabled: { settings.showSpeedLimit }
+            speedLimitEnabled: { settings.showSpeedLimit },
+            displayStyle: { settings.bandDisplayStyle }
         )
 
         self.settings = settings

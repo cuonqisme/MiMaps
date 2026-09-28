@@ -67,6 +67,19 @@ final class BandTransportTests: XCTestCase {
         XCTAssertEqual(scheduler.contents.first?.body, "Rẽ phải · Trần Phú")
     }
 
+    func testTransportUsesConfiguredRouteCardStyle() async throws {
+        let scheduler = BandSchedulerSpy()
+        let transport = NotificationBandTransport(
+            scheduler: scheduler,
+            displayStyle: { .routeCard }
+        )
+
+        try await transport.start()
+        try await transport.send(instruction(step: "card", distance: 200))
+
+        XCTAssertTrue(scheduler.contents.first?.body.contains("\n2 phút · 1 km · đến ") == true)
+    }
+
     func testDeduplicatorResetsForNewStep() {
         var deduplicator = BandInstructionDeduplicator()
         let first = instruction(step: "one", distance: 80)

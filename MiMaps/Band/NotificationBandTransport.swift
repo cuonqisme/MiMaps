@@ -7,6 +7,7 @@ final class NotificationBandTransport: BandTransport {
     private let notificationsEnabled: @MainActor () -> Bool
     private let soundEnabled: @MainActor () -> Bool
     private let speedLimitEnabled: @MainActor () -> Bool
+    private let displayStyle: @MainActor () -> BandDisplayStyle
     private var deduplicator = BandInstructionDeduplicator()
     private var isStarted = false
 
@@ -15,13 +16,15 @@ final class NotificationBandTransport: BandTransport {
         formatter: BandNotificationFormatter = BandNotificationFormatter(),
         notificationsEnabled: @escaping @MainActor () -> Bool = { true },
         soundEnabled: @escaping @MainActor () -> Bool = { false },
-        speedLimitEnabled: @escaping @MainActor () -> Bool = { true }
+        speedLimitEnabled: @escaping @MainActor () -> Bool = { true },
+        displayStyle: @escaping @MainActor () -> BandDisplayStyle = { .compact }
     ) {
         self.scheduler = scheduler
         self.formatter = formatter
         self.notificationsEnabled = notificationsEnabled
         self.soundEnabled = soundEnabled
         self.speedLimitEnabled = speedLimitEnabled
+        self.displayStyle = displayStyle
     }
 
     func start() async throws {
@@ -41,7 +44,8 @@ final class NotificationBandTransport: BandTransport {
             formatter.format(
                 instruction,
                 soundEnabled: soundEnabled(),
-                includeSpeedLimit: speedLimitEnabled()
+                includeSpeedLimit: speedLimitEnabled(),
+                displayStyle: displayStyle()
             )
         )
     }

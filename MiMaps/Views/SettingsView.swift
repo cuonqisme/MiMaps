@@ -46,6 +46,15 @@ struct SettingsView: View {
             Section("Thông báo Mi Band") {
                 Toggle("Bật thông báo điều hướng", isOn: $settings.bandNotificationsEnabled)
                 Toggle("Âm thanh trên điện thoại", isOn: $settings.notificationSoundEnabled)
+                Picker("Kiểu hiển thị", selection: $settings.bandDisplayStyle) {
+                    ForEach(BandDisplayStyle.allCases) { style in
+                        Text(style.localizedName).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text(settings.bandDisplayStyle.localizedDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Toggle("Hiển thị giới hạn tốc độ", isOn: $settings.showSpeedLimit)
                 Text("Chỉ hiển thị khi nguồn dữ liệu tuyến đường cung cấp giới hạn tốc độ. Apple MapKit hiện không cung cấp dữ liệu này qua API công khai.")
                     .font(.footnote)
@@ -54,6 +63,9 @@ struct SettingsView: View {
                 Button("Cho phép thông báo") {
                     Task { await requestNotificationPermission() }
                 }
+                Text("Mi Band 9 trên iPhone chỉ nhận nội dung chữ do iOS/Mi Fitness chuyển tiếp. MiMaps dùng các mũi tên chữ cơ bản ← ↑ → để tránh lỗi ô vuông; kích thước và bố cục cuối cùng do firmware của vòng tay quyết định.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Khoảng cách cảnh báo") {

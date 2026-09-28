@@ -40,6 +40,26 @@ final class FormatterTests: XCTestCase {
         XCTAssertEqual(content.body, "Vòng xuyến · lối ra 2")
     }
 
+    func testBandFormatterRouteCardIncludesRemainingTripSummary() {
+        let instruction = NavigationInstruction(
+            maneuver: .left,
+            roadName: "ĐL Hùng Vương",
+            distanceToManeuverMeters: 1_800,
+            remainingDistanceMeters: 167_000,
+            remainingTimeSeconds: 3 * 3_600 + 55 * 60,
+            stepIdentifier: "route-card",
+            timestamp: Date(timeIntervalSince1970: 1_000)
+        )
+
+        let content = BandNotificationFormatter().format(
+            instruction,
+            displayStyle: .routeCard
+        )
+
+        XCTAssertEqual(content.title, "← 1.8 km")
+        XCTAssertTrue(content.body.hasPrefix("Rẽ trái · ĐL Hùng Vương\n3 giờ 55 phút · 167 km · đến "))
+    }
+
     func testBandFormatterHandlesUTurnUnknownAndMissingRoad() {
         let formatter = BandNotificationFormatter()
 

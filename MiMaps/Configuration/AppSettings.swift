@@ -1,6 +1,29 @@
 import Combine
 import Foundation
 
+enum BandDisplayStyle: String, CaseIterable, Identifiable, Sendable {
+    case routeCard
+    case compact
+
+    var id: String { rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .routeCard: "Thẻ chỉ đường"
+        case .compact: "Gọn, tương thích"
+        }
+    }
+
+    var localizedDescription: String {
+        switch self {
+        case .routeCard:
+            "Hiển thị hướng, khoảng cách, tên đường, thời gian và quãng đường còn lại."
+        case .compact:
+            "Chỉ gửi hướng, khoảng cách và tên đường để dễ đọc trên màn hình nhỏ."
+        }
+    }
+}
+
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Key {
@@ -11,6 +34,7 @@ final class AppSettings: ObservableObject {
         static let mapDisplayStyle = "mapDisplayStyle"
         static let showTraffic = "showTraffic"
         static let showSpeedLimit = "showSpeedLimit"
+        static let bandDisplayStyle = "bandDisplayStyle"
         static let recentDestinations = "recentDestinations"
         static let avoidTolls = "avoidTolls"
         static let avoidHighways = "avoidHighways"
@@ -48,6 +72,10 @@ final class AppSettings: ObservableObject {
 
     @Published var showSpeedLimit: Bool {
         didSet { defaults.set(showSpeedLimit, forKey: Key.showSpeedLimit) }
+    }
+
+    @Published var bandDisplayStyle: BandDisplayStyle {
+        didSet { defaults.set(bandDisplayStyle.rawValue, forKey: Key.bandDisplayStyle) }
     }
 
     @Published private(set) var recentDestinations: [Destination]
@@ -91,6 +119,9 @@ final class AppSettings: ObservableObject {
         ) ?? .standard
         showTraffic = defaults.object(forKey: Key.showTraffic) as? Bool ?? true
         showSpeedLimit = defaults.object(forKey: Key.showSpeedLimit) as? Bool ?? true
+        bandDisplayStyle = BandDisplayStyle(
+            rawValue: defaults.string(forKey: Key.bandDisplayStyle) ?? ""
+        ) ?? .routeCard
         recentDestinations = Self.storedDestinations(defaults: defaults)
         avoidTolls = defaults.object(forKey: Key.avoidTolls) as? Bool ?? false
         avoidHighways = defaults.object(forKey: Key.avoidHighways) as? Bool ?? false

@@ -18,7 +18,8 @@ struct BandNotificationFormatter: Sendable {
     func format(
         _ instruction: NavigationInstruction,
         soundEnabled: Bool = false,
-        includeSpeedLimit: Bool = true
+        includeSpeedLimit: Bool = true,
+        displayStyle: BandDisplayStyle = .compact
     ) -> NavigationNotificationContent {
         if let alert = instruction.safetyAlert {
             return safetyContent(
@@ -43,6 +44,10 @@ struct BandNotificationFormatter: Sendable {
         )
         if includeSpeedLimit, let limit = instruction.speedLimitKPH {
             body += " · Giới hạn \(Int(limit.rounded())) km/h"
+        }
+        if displayStyle == .routeCard,
+           let summary = routeSummary(for: instruction) {
+            body += "\n\(summary)"
         }
         return NavigationNotificationContent(
             title: "\(symbol) \(DistanceFormatter.string(fromMeters: instruction.distanceToManeuverMeters))",
@@ -95,5 +100,27 @@ struct BandNotificationFormatter: Sendable {
             return nil
         }
         return value
+    }
+
+    private func routeSummary(for instruction: NavigationInstruction) -> String? {
+        guard instruction.remainingTimeSeconds > 0 || instruction.remainingDistanceMeters > 0 else {
+            return nil
+        }
+
+        var values: [String] = []
+        if instruction.remainingTimeSeconds > 0 {
+            values.append(DurationFormatter.string(fromSeconds: instruction.remainingTimeSeconds))
+        }
+        if instruction.remainingDistanceMeters > 0 {
+            values.append(DistanceFormatter.string(fromMeters: instruction.remainingDistanceMeters))
+        }
+        if instruction.remainingTimeSeconds > 0 {
+            let arrival = instruction.timestamp.addingTimeInterval(instruction.remainingTimeSeconds)
+            let components = Calendar.autoupdatingCurrent.dateComponents([.hour, .minute], from: arrival)
+            if let hour = components.hour, let minute = components.minute {
+                values.append(String(format: "đến %02d:%02d", hour, minute))
+            }
+        }
+        return values.isEmpty ? nil : values.joined(separator: " · ")
     }
 }
