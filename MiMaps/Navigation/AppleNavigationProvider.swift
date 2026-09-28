@@ -46,7 +46,10 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     private struct RouteStepSnapshot {
         let instructions: String
         let distance: CLLocationDistance
-        let polyline: MKPolyline
+        let coordinates: [CLLocationCoordinate2D]
+        let startProgressMeters: CLLocationDistance
+        let endProgressMeters: CLLocationDistance
+        let stableIdentifier: String
     }
 
     private let stateEvents = NavigationEventStream<NavigationState>()
@@ -59,11 +62,15 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     private var lastLocation: CLLocation?
     private var destination: Destination?
     private var routeSteps: [RouteStepSnapshot] = []
+    private var routeGeometry: RouteGeometry?
     private var routeDistance: CLLocationDistance = 0
     private var routeTravelTime: TimeInterval = 0
-    private var currentStepIndex = 0
+    private var routeProgressMeters: CLLocationDistance?
+    private var lastProgressTimestamp: Date?
+    private var activeInstructionIndex: Int?
     private var offRouteUpdateCount = 0
     private var rerouteInProgress = false
+    private var lastRerouteAt: Date?
     private var routeCandidates: [MKRoute] = []
 
     init(
@@ -121,10 +128,14 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         selectedRouteIndex = 0
         routeDistance = 0
         routeTravelTime = 0
+        routeGeometry = nil
+        routeProgressMeters = nil
+        lastProgressTimestamp = nil
+        activeInstructionIndex = nil
         currentInstruction = nil
         lastInstructionText = nil
-        currentStepIndex = 0
         offRouteUpdateCount = 0
+        lastRerouteAt = nil
         routeRevision += 1
         transition(to: .stopped)
     }
@@ -219,22 +230,45 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         from sourceLocation: CLLocation,
         isReroute: Bool
     ) throws {
+        let candidateSteps = route.steps.filter { $0.polyline.pointCount > 0 && $0.distance > 0 }
+        guard let geometry = RouteGeometry(coordinates: coordinates(in: route.polyline)),
+              !candidateSteps.isEmpty else {
+            throw AppleNavigationProviderError.routeNotFound
+        }
+        let totalStepDistance = candidateSteps.reduce(0) { $0 + $1.distance }
+        guard totalStepDistance > 0 else { throw AppleNavigationProviderError.routeNotFound }
+
         selectedRouteIndex = index
         routePolyline = route.polyline
-        routeSteps = route.steps
-            .filter { $0.polyline.pointCount > 0 && $0.distance > 0 }
-            .map {
-                RouteStepSnapshot(
-                    instructions: $0.instructions.trimmingCharacters(in: .whitespacesAndNewlines),
-                    distance: $0.distance,
-                    polyline: $0.polyline
+        routeGeometry = geometry
+        var cumulativeStepDistance = 0.0
+        routeSteps = candidateSteps.map { step in
+            let instructions = step.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+            let stepCoordinates = coordinates(in: step.polyline)
+            let startProgress = geometry.totalDistanceMeters
+                * cumulativeStepDistance / totalStepDistance
+            cumulativeStepDistance += step.distance
+            let endProgress = geometry.totalDistanceMeters
+                * cumulativeStepDistance / totalStepDistance
+            return RouteStepSnapshot(
+                instructions: instructions,
+                distance: step.distance,
+                coordinates: stepCoordinates,
+                startProgressMeters: startProgress,
+                endProgressMeters: endProgress,
+                stableIdentifier: stableStepIdentifier(
+                    instructions: instructions,
+                    coordinate: stepCoordinates.first
                 )
-            }
-        guard !routeSteps.isEmpty else { throw AppleNavigationProviderError.routeNotFound }
+            )
+        }
         routeDistance = route.distance
         routeTravelTime = route.expectedTravelTime
-        currentStepIndex = 0
+        routeProgressMeters = nil
+        lastProgressTimestamp = nil
+        activeInstructionIndex = routeSteps.indices.first { !routeSteps[$0].instructions.isEmpty }
         offRouteUpdateCount = 0
+        if !isReroute { lastRerouteAt = nil }
         routeRevision += 1
         if isReroute {
             routeChangeCount += 1
@@ -286,40 +320,68 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
     }
 
     private func updateGuidance(with location: CLLocation) {
-        guard let destination, !routeSteps.isEmpty else { return }
+        guard let destination,
+              let routeGeometry,
+              !routeSteps.isEmpty else { return }
         let destinationLocation = CLLocation(latitude: destination.latitude, longitude: destination.longitude)
         if location.distance(from: destinationLocation) <= 30 {
             arrive(at: destination)
             return
         }
 
-        let searchEnd = min(routeSteps.count - 1, currentStepIndex + 5)
-        if currentStepIndex <= searchEnd {
-            let closest = (currentStepIndex...searchEnd).min { lhs, rhs in
-                distance(from: location, to: routeSteps[lhs].polyline)
-                    < distance(from: location, to: routeSteps[rhs].polyline)
-            }
-            if let closest { currentStepIndex = max(currentStepIndex, closest) }
-        }
+        let elapsed = lastProgressTimestamp.map {
+            max(1, location.timestamp.timeIntervalSince($0))
+        } ?? 1
+        let course = location.course >= 0 && location.speed >= 2 ? location.course : nil
+        guard let projection = routeGeometry.project(
+            coordinate: location.coordinate,
+            previousProgressMeters: routeProgressMeters,
+            elapsedTime: elapsed,
+            speedMetersPerSecond: location.speed >= 0 ? location.speed : nil,
+            horizontalAccuracy: location.horizontalAccuracy,
+            courseDegrees: course
+        ) else { return }
+        routeProgressMeters = projection.progressMeters
+        lastProgressTimestamp = location.timestamp
 
-        let routeDistanceAway = routePolyline.map { distance(from: location, to: $0) } ?? 0
-        if routeDistanceAway > 80, location.horizontalAccuracy <= 50 {
+        let offRouteDistance = max(65, location.horizontalAccuracy * 2)
+        let movingWrongWay = location.speed >= 4
+            && (projection.headingDifferenceDegrees ?? 0) >= 110
+        if (projection.distanceFromRouteMeters > offRouteDistance || movingWrongWay),
+           location.horizontalAccuracy <= 50 {
             offRouteUpdateCount += 1
         } else {
             offRouteUpdateCount = 0
         }
-        if offRouteUpdateCount >= 3 { beginReroute(from: location) }
+        if offRouteUpdateCount >= 3, canReroute(at: location.timestamp) {
+            lastRerouteAt = location.timestamp
+            beginReroute(from: location)
+            return
+        }
 
-        let nextIndex = nextInstructionIndex(after: currentStepIndex)
+        guard let nextIndex = instructionIndex(
+            at: projection.progressMeters,
+            horizontalAccuracy: location.horizontalAccuracy
+        ) else { return }
+        activeInstructionIndex = nextIndex
         let nextStep = routeSteps[nextIndex]
-        let maneuverDistance = distanceToStart(of: nextIndex, from: location)
-        let remainingDistance = remainingRouteDistance(from: currentStepIndex, location: location)
+        let maneuverDistance = max(0, nextStep.startProgressMeters - projection.progressMeters)
+        let remainingGeometryDistance = max(
+            0,
+            routeGeometry.totalDistanceMeters - projection.progressMeters
+        )
+        let remainingDistance = routeGeometry.totalDistanceMeters > 0
+            ? routeDistance * remainingGeometryDistance / routeGeometry.totalDistanceMeters
+            : 0
         let remainingTime = routeDistance > 0
             ? routeTravelTime * min(1, remainingDistance / routeDistance)
             : 0
         let text = nextStep.instructions.isEmpty ? "Tiếp tục theo tuyến đường" : nextStep.instructions
         lastInstructionText = text
-        let maneuver = classifier.classify(text)
+        let maneuver = classifier.classify(
+            text,
+            turnAngleDegrees: turnAngleDegrees(at: nextIndex)
+        )
         emit(
             NavigationInstruction(
                 maneuver: maneuver,
@@ -327,7 +389,7 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
                 distanceToManeuverMeters: maneuverDistance,
                 remainingDistanceMeters: remainingDistance,
                 remainingTimeSeconds: remainingTime,
-                stepIdentifier: "apple-\(routeRevision)-\(nextIndex)",
+                stepIdentifier: nextStep.stableIdentifier,
                 timestamp: location.timestamp,
                 currentSpeedKPH: location.speed >= 0 ? location.speed * 3.6 : nil
             )
@@ -351,54 +413,91 @@ final class AppleNavigationProvider: NSObject, ObservableObject, NavigationProvi
         }
     }
 
-    private func nextInstructionIndex(after index: Int) -> Int {
-        guard index < routeSteps.count - 1 else { return index }
-        return ((index + 1)..<routeSteps.count).first { !routeSteps[$0].instructions.isEmpty }
-            ?? min(index + 1, routeSteps.count - 1)
-    }
-
-    private func distanceToStart(of stepIndex: Int, from location: CLLocation) -> CLLocationDistance {
-        guard stepIndex > currentStepIndex else { return 0 }
-        var result = remainingDistance(on: routeSteps[currentStepIndex], from: location)
-        if stepIndex > currentStepIndex + 1 {
-            for index in (currentStepIndex + 1)..<stepIndex {
-                result += routeSteps[index].distance
-            }
+    private func instructionIndex(
+        at progress: CLLocationDistance,
+        horizontalAccuracy: CLLocationAccuracy
+    ) -> Int? {
+        let passAllowance = min(45, max(20, horizontalAccuracy))
+        if let activeInstructionIndex,
+           routeSteps.indices.contains(activeInstructionIndex),
+           !routeSteps[activeInstructionIndex].instructions.isEmpty,
+           progress <= routeSteps[activeInstructionIndex].startProgressMeters + passAllowance {
+            return activeInstructionIndex
         }
-        return max(0, result)
-    }
 
-    private func remainingRouteDistance(from stepIndex: Int, location: CLLocation) -> CLLocationDistance {
-        var result = remainingDistance(on: routeSteps[stepIndex], from: location)
-        if stepIndex < routeSteps.count - 1 {
-            for index in (stepIndex + 1)..<routeSteps.count {
-                result += routeSteps[index].distance
-            }
+        let searchStart = min((activeInstructionIndex ?? -1) + 1, routeSteps.count)
+        if searchStart < routeSteps.count,
+           let next = (searchStart..<routeSteps.count).first(where: {
+               !routeSteps[$0].instructions.isEmpty
+                   && routeSteps[$0].startProgressMeters >= progress - passAllowance
+           }) {
+            return next
         }
-        return max(0, result)
+        return routeSteps.indices.reversed().first { !routeSteps[$0].instructions.isEmpty }
     }
 
-    private func remainingDistance(on step: RouteStepSnapshot, from location: CLLocation) -> CLLocationDistance {
-        let coordinates = coordinates(in: step.polyline)
-        guard !coordinates.isEmpty else { return step.distance }
-        let nearestIndex = coordinates.indices.min { lhs, rhs in
-            location.distance(from: self.location(for: coordinates[lhs]))
-                < location.distance(from: self.location(for: coordinates[rhs]))
-        } ?? 0
-        var result = location.distance(from: self.location(for: coordinates[nearestIndex]))
-        guard nearestIndex < coordinates.count - 1 else { return result }
-        for index in nearestIndex..<(coordinates.count - 1) {
-            result += self.location(for: coordinates[index]).distance(
-                from: self.location(for: coordinates[index + 1])
-            )
+    private func canReroute(at timestamp: Date) -> Bool {
+        guard !rerouteInProgress else { return false }
+        return lastRerouteAt.map { timestamp.timeIntervalSince($0) >= 25 } ?? true
+    }
+
+    private func turnAngleDegrees(at stepIndex: Int) -> Double? {
+        guard routeSteps.indices.contains(stepIndex),
+              let outgoing = firstDistinctSegment(in: routeSteps[stepIndex].coordinates) else {
+            return nil
         }
-        return result
+        guard let previousIndex = routeSteps.indices[..<stepIndex].reversed().first(where: {
+            lastDistinctSegment(in: routeSteps[$0].coordinates) != nil
+        }),
+              let incoming = lastDistinctSegment(in: routeSteps[previousIndex].coordinates) else {
+            return nil
+        }
+        return RouteGeometry.signedTurnAngleDegrees(
+            incomingStart: incoming.0,
+            incomingEnd: incoming.1,
+            outgoingStart: outgoing.0,
+            outgoingEnd: outgoing.1
+        )
     }
 
-    private func distance(from location: CLLocation, to polyline: MKPolyline) -> CLLocationDistance {
-        coordinates(in: polyline)
-            .map { location.distance(from: self.location(for: $0)) }
-            .min() ?? .greatestFiniteMagnitude
+    private func firstDistinctSegment(
+        in coordinates: [CLLocationCoordinate2D]
+    ) -> (CLLocationCoordinate2D, CLLocationCoordinate2D)? {
+        guard coordinates.count >= 2 else { return nil }
+        for index in 0..<(coordinates.count - 1)
+        where location(for: coordinates[index]).distance(from: location(for: coordinates[index + 1])) >= 2 {
+            return (coordinates[index], coordinates[index + 1])
+        }
+        return nil
+    }
+
+    private func lastDistinctSegment(
+        in coordinates: [CLLocationCoordinate2D]
+    ) -> (CLLocationCoordinate2D, CLLocationCoordinate2D)? {
+        guard coordinates.count >= 2 else { return nil }
+        for index in stride(from: coordinates.count - 1, through: 1, by: -1)
+        where location(for: coordinates[index - 1]).distance(from: location(for: coordinates[index])) >= 2 {
+            return (coordinates[index - 1], coordinates[index])
+        }
+        return nil
+    }
+
+    private func stableStepIdentifier(
+        instructions: String,
+        coordinate: CLLocationCoordinate2D?
+    ) -> String {
+        let normalized = instructions
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "vi_VN"))
+            .lowercased()
+            .replacingOccurrences(of: "đ", with: "d")
+        let coordinate = coordinate ?? kCLLocationCoordinate2DInvalid
+        return String(
+            format: "apple:%.4f:%.4f:%@",
+            locale: Locale(identifier: "en_US_POSIX"),
+            coordinate.latitude,
+            coordinate.longitude,
+            String(normalized.prefix(80))
+        )
     }
 
     private func coordinates(in polyline: MKPolyline) -> [CLLocationCoordinate2D] {

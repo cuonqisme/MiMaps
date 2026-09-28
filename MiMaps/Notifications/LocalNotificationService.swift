@@ -44,6 +44,7 @@ enum LocalNotificationError: LocalizedError, Equatable {
 @MainActor
 final class LocalNotificationService: LocalNotificationScheduling {
     nonisolated static let navigationCategoryIdentifier = "NAVIGATION_MANEUVER"
+    nonisolated static let currentNavigationNotificationIdentifier = "navigation-current"
 
     private let center: UNUserNotificationCenter
 
@@ -68,8 +69,17 @@ final class LocalNotificationService: LocalNotificationScheduling {
         notification.categoryIdentifier = content.categoryIdentifier
         notification.sound = content.soundEnabled ? .default : nil
 
+        // Keep only the latest maneuver on the lock screen. The Mi Band still
+        // receives every newly delivered alert, while stale turns no longer
+        // accumulate and distract the rider.
+        center.removePendingNotificationRequests(
+            withIdentifiers: [Self.currentNavigationNotificationIdentifier]
+        )
+        center.removeDeliveredNotifications(
+            withIdentifiers: [Self.currentNavigationNotificationIdentifier]
+        )
         let request = UNNotificationRequest(
-            identifier: "navigation-\(UUID().uuidString)",
+            identifier: Self.currentNavigationNotificationIdentifier,
             content: notification,
             trigger: nil
         )

@@ -55,6 +55,22 @@ final class BandNotificationPolicyTests: XCTestCase {
         XCTAssertFalse(decision.crossedThresholds.contains(200))
     }
 
+    func testSameManeuverDoesNotRepeatAfterDistanceTemporarilyIncreases() {
+        var policy = BandNotificationPolicy()
+        _ = policy.evaluate(instruction(distance: 510, step: "stable-turn", time: 0))
+        XCTAssertNotNil(
+            policy.evaluate(instruction(distance: 499, step: "stable-turn", time: 3)).notification
+        )
+
+        _ = policy.evaluate(instruction(distance: 950, step: "stable-turn", time: 6))
+        let repeatedCrossing = policy.evaluate(
+            instruction(distance: 499, step: "stable-turn", time: 9)
+        )
+
+        XCTAssertNil(repeatedCrossing.notification)
+        XCTAssertFalse(repeatedCrossing.crossedThresholds.contains(500))
+    }
+
     func testCooldownDefersButDoesNotLoseCrossedThreshold() {
         var policy = BandNotificationPolicy(cooldownSeconds: 2)
         _ = policy.evaluate(instruction(distance: 510, time: 0))
