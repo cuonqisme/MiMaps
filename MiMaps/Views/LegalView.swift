@@ -20,7 +20,15 @@ struct LegalView: View {
             }
 
             Section("Mi Band") {
-                Text("Chỉ dẫn được gửi bằng thông báo cục bộ của iOS và phản chiếu qua Mi Fitness. Ứng dụng không kết nối trực tiếp tới thiết bị bằng giao thức BLE riêng của Xiaomi.")
+                Text("MiMaps có thể kết nối Bluetooth trực tiếp với Xiaomi Smart Band. Khóa ghép đôi chỉ được lưu trong Keychain trên iPhone. Band Lab yêu cầu người dùng chủ động bắt đầu xác thực và không tự reset, hủy ghép đôi hoặc cài firmware.")
+            }
+
+            Section("Thư viện mã nguồn mở") {
+                Text("MiMaps dùng CryptoSwift để thực hiện AES-CCM trong bước xác thực thiết bị.")
+                Link(
+                    "CryptoSwift — giấy phép và mã nguồn",
+                    destination: URL(string: "https://github.com/krzyzanowskim/CryptoSwift")!
+                )
             }
         }
         .navigationTitle("Pháp lý và quyền riêng tư")

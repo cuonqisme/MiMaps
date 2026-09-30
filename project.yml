@@ -19,12 +19,18 @@ settings:
 configs:
   Debug: debug
   Release: release
+packages:
+  CryptoSwift:
+    url: https://github.com/krzyzanowskim/CryptoSwift.git
+    from: 1.10.0
 targets:
   MiMaps:
     type: application
     platform: iOS
     sources:
       - path: MiMaps
+    dependencies:
+      - package: CryptoSwift
     configFiles:
       Debug: Configuration/Base.xcconfig
       Release: Configuration/Base.xcconfig

@@ -18,6 +18,8 @@ Configuration/Secrets.xcconfig
 AuthKey_*.p8
 /certificate/
 /Certificate.zip
+/Documents/
+/Documents.zip
 
 # Swift Package Manager
 .build/

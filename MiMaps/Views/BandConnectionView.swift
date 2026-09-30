@@ -67,8 +67,18 @@ struct BandConnectionView: View {
             }
 
             Section("Xác thực thiết bị") {
+                LabeledContent("Trạng thái", value: connection.authenticationState.localizedDescription)
                 if let fingerprint = connection.savedKeyFingerprint {
                     LabeledContent("Khóa đã lưu", value: fingerprint)
+                    if connection.state.isReady {
+                        Button(connection.authenticationState == .authenticated ? "Đã xác thực" : "Xác thực trực tiếp") {
+                            connection.authenticate()
+                        }
+                        .disabled(
+                            connection.authenticationState.isInProgress
+                                || connection.authenticationState == .authenticated
+                        )
+                    }
                     Button("Xóa khóa", role: .destructive) {
                         do {
                             try connection.deleteAuthenticationKey()
@@ -102,6 +112,9 @@ struct BandConnectionView: View {
                 Text("Khóa 16 byte được lấy từ dữ liệu ghép đôi Mi Fitness, chỉ lưu cục bộ trong Keychain và không xuất hiện trong báo cáo.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Text("Trước khi xác thực, hãy đóng hẳn Mi Fitness khỏi màn hình đa nhiệm. Không hủy ghép đôi và không reset vòng.")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
             }
 
             if connection.state.isReady {
@@ -116,7 +129,7 @@ struct BandConnectionView: View {
                         }
                     }
                     LabeledContent("Gói đã nhận", value: "\(connection.capturedPackets.count)")
-                    Text("Chế độ này chỉ đăng ký nhận notify trên FE95/FDAB; chưa gửi lệnh xác thực, cấu hình hay firmware.")
+                    Text("Chế độ này lưu bản xem trước gói FE95/FDAB để chẩn đoán. Nút xác thực chỉ thực hiện bắt tay bảo mật, chưa cài ứng dụng hay firmware lên vòng.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -126,7 +139,7 @@ struct BandConnectionView: View {
                 ShareLink(item: connection.diagnosticsReport()) {
                     Label("Chia sẻ báo cáo Band Lab", systemImage: "square.and.arrow.up")
                 }
-                Text("Band Lab có thể lưu khóa ghép đôi và thu gói notify thụ động. MiMaps chưa gửi lệnh cấu hình hoặc firmware cho đến khi xác thực đúng giao thức của thiết bị.")
+                Text("Band Lab lưu khóa ghép đôi trong Keychain, thu gói chẩn đoán và có thể xác thực trực tiếp với Band 8. Việc cài companion và gửi giao diện điều hướng vẫn được khóa cho tới khi bước xác thực này vượt qua kiểm thử thực tế.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

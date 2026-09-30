@@ -44,6 +44,35 @@ enum MiBandConnectionState: Equatable, Sendable {
     }
 }
 
+enum MiBandAuthenticationState: Equatable, Sendable {
+    case missingKey
+    case ready
+    case subscribing
+    case waitingForWatch
+    case verifying
+    case authenticated
+    case failed(String)
+
+    var localizedDescription: String {
+        switch self {
+        case .missingKey: "Chưa cấu hình khóa"
+        case .ready: "Sẵn sàng xác thực"
+        case .subscribing: "Đang mở kênh bảo mật…"
+        case .waitingForWatch: "Đang chờ phản hồi từ vòng…"
+        case .verifying: "Đang kiểm tra khóa…"
+        case .authenticated: "Đã xác thực trực tiếp"
+        case let .failed(message): "Lỗi: \(message)"
+        }
+    }
+
+    var isInProgress: Bool {
+        switch self {
+        case .subscribing, .waitingForWatch, .verifying: true
+        default: false
+        }
+    }
+}
+
 enum MiBandDeviceMatcher {
     static func isMiBand8(name: String?) -> Bool {
         guard let normalized = name?
