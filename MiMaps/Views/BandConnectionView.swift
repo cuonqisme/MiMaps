@@ -18,10 +18,18 @@ struct BandConnectionView: View {
                     Button("Ngắt kết nối", role: .destructive) { connection.disconnect() }
                     Button("Quên thiết bị", role: .destructive) { connection.forgetDevice() }
                 } else {
+                    if connection.hasSavedDevice {
+                        Button("Kết nối lại Band đã lưu") {
+                            connection.reconnectSavedDevice()
+                        }
+                    }
                     Button(connection.state == .scanning ? "Đang tìm…" : "Tìm Mi Band 8") {
                         connection.startScan()
                     }
                     .disabled(connection.state == .scanning)
+                    Text("Đóng hẳn Mi Fitness trước, sau đó mới bấm kết nối. MiMaps không còn tự kết nối Band khi khởi động.")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
                 }
             }
 

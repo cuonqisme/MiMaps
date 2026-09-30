@@ -24,6 +24,9 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var characteristicHandles: [String: CBCharacteristic] = [:]
     private var authenticationAttemptID: UUID?
     private var authenticationContext: AuthenticationContext?
+    private var authenticationNotificationStage: AuthenticationNotificationStage = .idle
+    private var lastConnectedDeviceName: String?
+    private var lastConnectedDeviceIdentifier: UUID?
     private let defaults: UserDefaults
     private let now: () -> Date
     private let credentialStore: MiBandCredentialStoring
@@ -37,6 +40,13 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private enum ProtocolCharacteristic {
         static let commandRead = "FE95/0051"
         static let commandWrite = "FE95/0052"
+    }
+
+    private enum AuthenticationNotificationStage: String, Equatable {
+        case idle
+        case enablingWrite = "bật notify FE95/0052"
+        case enablingRead = "bật notify FE95/0051"
+        case ready = "gửi nonce"
     }
 
     init(
@@ -58,6 +68,10 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
 
     var connectedDeviceName: String? {
         connectedPeripheral?.name
+    }
+
+    var hasSavedDevice: Bool {
+        defaults.string(forKey: StorageKey.peripheralIdentifier) != nil
     }
 
     func startScan() {
@@ -140,6 +154,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     }
 
     func authenticate() {
+        appendEvent("Người dùng yêu cầu xác thực trực tiếp")
         guard state.isReady, let peripheral = connectedPeripheral else {
             failAuthentication("Thiết bị chưa sẵn sàng.")
             return
@@ -149,7 +164,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             appendEvent("Không thể xác thực: chưa có khóa trong Keychain")
             return
         }
-        guard let commandRead = characteristicHandles[ProtocolCharacteristic.commandRead],
+        guard characteristicHandles[ProtocolCharacteristic.commandRead] != nil,
               let commandWrite = characteristicHandles[ProtocolCharacteristic.commandWrite] else {
             failAuthentication("Không tìm thấy kênh FE95/0051–0052.")
             return
@@ -174,10 +189,16 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                 sessionKeys: nil
             )
             authenticationState = .subscribing
-            peripheral.setNotifyValue(true, for: commandRead)
-            peripheral.setNotifyValue(true, for: commandWrite)
-            appendEvent("Bắt đầu xác thực cục bộ; đang mở kênh FE95 bảo mật")
-            tryStartAuthenticationIfSubscribed()
+            authenticationNotificationStage = .enablingWrite
+            appendEvent("Bước 1/3: bật notify FE95/0052")
+            if commandWrite.isNotifying {
+                advanceAuthenticationSubscriptions(
+                    notifiedKey: ProtocolCharacteristic.commandWrite,
+                    peripheral: peripheral
+                )
+            } else {
+                peripheral.setNotifyValue(true, for: commandWrite)
+            }
             scheduleAuthenticationTimeout(for: attemptID)
         } catch {
             failAuthentication(error.localizedDescription)
@@ -222,11 +243,12 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             "Generated: \(ISO8601DateFormatter().string(from: now()))",
             "Bluetooth: \(Self.bluetoothDescription(central.state))",
             "State: \(state.localizedDescription)",
-            "Device: \(device?.name ?? "—")",
-            "Identifier: \(device?.identifier.uuidString ?? "—")",
+            "Device: \(device?.name ?? lastConnectedDeviceName ?? "—")",
+            "Identifier: \(device?.identifier.uuidString ?? lastConnectedDeviceIdentifier?.uuidString ?? "—")",
             "GATT characteristics: \(characteristics.count)",
             "Authentication key: \(savedKeyFingerprint == nil ? "not configured" : "configured")",
             "Authentication: \(authenticationState.localizedDescription)",
+            "Authentication phase: \(authenticationNotificationStage.rawValue)",
             "Captured packets: \(capturedPackets.count)",
             ""
         ]
@@ -271,18 +293,49 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         authenticationState = savedKeyFingerprint == nil ? .missingKey : .ready
     }
 
-    private func tryStartAuthenticationIfSubscribed() {
-        guard authenticationState == .subscribing,
+    private func advanceAuthenticationSubscriptions(notifiedKey: String, peripheral: CBPeripheral) {
+        guard authenticationState == .subscribing else { return }
+        switch (authenticationNotificationStage, notifiedKey) {
+        case (.enablingWrite, let key) where key == ProtocolCharacteristic.commandWrite:
+            guard let read = characteristicHandles[ProtocolCharacteristic.commandRead] else {
+                failAuthentication("Không tìm thấy FE95/0051.")
+                return
+            }
+            authenticationNotificationStage = .enablingRead
+            appendEvent("Bước 2/3: notify FE95/0052 đã bật; tiếp tục FE95/0051")
+            if read.isNotifying {
+                advanceAuthenticationSubscriptions(
+                    notifiedKey: ProtocolCharacteristic.commandRead,
+                    peripheral: peripheral
+                )
+            } else {
+                peripheral.setNotifyValue(true, for: read)
+            }
+        case (.enablingRead, let key) where key == ProtocolCharacteristic.commandRead:
+            authenticationNotificationStage = .ready
+            appendEvent("Bước 3/3: hai kênh notify đã sẵn sàng; chuẩn bị gửi nonce")
+            guard let attemptID = authenticationAttemptID else { return }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(300))
+                self?.sendAuthenticationNonce(for: attemptID)
+            }
+        default:
+            break
+        }
+    }
+
+    private func sendAuthenticationNonce(for attemptID: UUID) {
+        guard authenticationAttemptID == attemptID,
+              authenticationState == .subscribing,
+              authenticationNotificationStage == .ready,
               let peripheral = connectedPeripheral,
-              let read = characteristicHandles[ProtocolCharacteristic.commandRead],
               let write = characteristicHandles[ProtocolCharacteristic.commandWrite],
-              read.isNotifying, write.isNotifying,
               let context = authenticationContext else { return }
         do {
             let command = try MiBandAuthProtocol.makePhoneNonceCommand(phoneNonce: context.phoneNonce)
-            writeValue(MiBandAuthProtocol.plaintextFrame(command), to: write, peripheral: peripheral)
             authenticationState = .waitingForWatch
-            appendEvent("Đã gửi thử thách xác thực; đang chờ nonce của vòng")
+            appendEvent("Gửi nonce xác thực qua FE95/0052 (\(command.count + 4) byte)")
+            writeValue(MiBandAuthProtocol.plaintextFrame(command), to: write, peripheral: peripheral)
         } catch {
             failAuthentication(error.localizedDescription)
         }
@@ -343,6 +396,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                     throw MiBandAuthProtocolError.watchVerificationFailed
                 }
                 authenticationAttemptID = nil
+                authenticationNotificationStage = .idle
                 authenticationState = .authenticated
                 appendEvent("Xác thực trực tiếp Xiaomi Smart Band 8 thành công")
             default:
@@ -376,6 +430,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private func failAuthentication(_ message: String) {
         authenticationAttemptID = nil
         authenticationContext = nil
+        authenticationNotificationStage = .idle
         authenticationState = .failed(message)
         appendEvent("Xác thực thất bại: \(message)")
     }
@@ -429,7 +484,9 @@ extension MiBandDirectConnection: @preconcurrency CBCentralManagerDelegate {
         }
 
         if case .bluetoothUnavailable = state { state = .idle }
-        reconnectSavedDevice()
+        if hasSavedDevice {
+            appendEvent("Thiết bị đã lưu sẵn sàng; chờ người dùng kết nối thủ công")
+        }
     }
 
     func centralManager(
@@ -462,11 +519,14 @@ extension MiBandDirectConnection: @preconcurrency CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         connectedPeripheral = peripheral
+        lastConnectedDeviceName = peripheral.name ?? "Mi Band 8"
+        lastConnectedDeviceIdentifier = peripheral.identifier
         characteristics = []
         characteristicHandles = [:]
         pendingServiceUUIDs = []
         authenticationAttemptID = nil
         authenticationContext = nil
+        authenticationNotificationStage = .idle
         authenticationState = savedKeyFingerprint == nil ? .missingKey : .ready
         peripheral.delegate = self
         let name = peripheral.name ?? "Mi Band 8"
@@ -489,15 +549,26 @@ extension MiBandDirectConnection: @preconcurrency CBCentralManagerDelegate {
         didDisconnectPeripheral peripheral: CBPeripheral,
         error: Error?
     ) {
+        let interruptedAuthentication = authenticationState.isInProgress
+        let interruptedPhase = authenticationNotificationStage.rawValue
         connectedPeripheral = nil
         pendingServiceUUIDs = []
         characteristicHandles = [:]
-        characteristics = []
         authenticationAttemptID = nil
         authenticationContext = nil
-        authenticationState = savedKeyFingerprint == nil ? .missingKey : .ready
+        authenticationNotificationStage = .idle
+        if interruptedAuthentication {
+            authenticationState = .failed("Band ngắt kết nối khi đang \(interruptedPhase).")
+        } else if authenticationState == .authenticated {
+            authenticationState = .failed("Band đã ngắt kết nối sau xác thực.")
+        } else {
+            authenticationState = savedKeyFingerprint == nil ? .missingKey : .ready
+        }
         isCapturingPackets = false
         state = error.map { .failed($0.localizedDescription) } ?? .disconnected
+        if interruptedAuthentication {
+            appendEvent("Xác thực bị gián đoạn tại bước: \(interruptedPhase)")
+        }
         appendEvent("Đã ngắt kết nối\(error.map { ": \($0.localizedDescription)" } ?? "")")
     }
 }
@@ -563,7 +634,27 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
             return
         }
         appendEvent("Notify \(characteristic.isNotifying ? "ON" : "OFF") \(service)/\(characteristic.uuid.uuidString)")
-        tryStartAuthenticationIfSubscribed()
+        guard characteristic.isNotifying,
+              let serviceUUID = characteristic.service?.uuid else { return }
+        let key = Self.characteristicKey(service: serviceUUID, characteristic: characteristic.uuid)
+        advanceAuthenticationSubscriptions(notifiedKey: key, peripheral: peripheral)
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didWriteValueFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
+        guard let serviceUUID = characteristic.service?.uuid else { return }
+        let key = Self.characteristicKey(service: serviceUUID, characteristic: characteristic.uuid)
+        if let error {
+            appendEvent("Ghi \(key) thất bại: \(error.localizedDescription)")
+            if authenticationState.isInProgress {
+                failAuthentication("Không thể ghi \(key): \(error.localizedDescription)")
+            }
+        } else if authenticationState.isInProgress {
+            appendEvent("Ghi \(key) thành công ở tầng GATT")
+        }
     }
 
     func peripheral(
