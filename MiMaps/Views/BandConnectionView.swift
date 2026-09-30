@@ -1,9 +1,11 @@
 import SwiftUI
+import UIKit
 
 struct BandConnectionView: View {
     @ObservedObject private var connection: MiBandDirectConnection
     @State private var authenticationKey = ""
     @State private var keyError: String?
+    @State private var navigationCardPreview: UIImage?
 
     init(connection: MiBandDirectConnection) {
         _connection = ObservedObject(wrappedValue: connection)
@@ -134,6 +136,30 @@ struct BandConnectionView: View {
                     Button("Gửi thử: rẽ trái sau 100 m") {
                         connection.sendTestNavigationNotification()
                     }
+                    Button("Xem thẻ điều hướng Band 8") {
+                        navigationCardPreview = MiBandNavigationCardRenderer.render(
+                            NavigationInstruction(
+                                maneuver: .roundaboutExit(3),
+                                roadName: "Giáp Hải",
+                                distanceToManeuverMeters: 513,
+                                remainingDistanceMeters: 9_700,
+                                remainingTimeSeconds: 1_200,
+                                stepIdentifier: "band-preview"
+                            )
+                        )
+                    }
+                    if let navigationCardPreview {
+                        HStack {
+                            Spacer()
+                            Image(uiImage: navigationCardPreview)
+                                .resizable()
+                                .interpolation(.high)
+                                .scaledToFit()
+                                .frame(width: 96, height: 245)
+                                .accessibilityLabel("Bản xem trước thẻ điều hướng Mi Band 8")
+                            Spacer()
+                        }
+                    }
                     if connection.decryptedPacketCount > 0 || connection.sentCommandCount > 0 {
                         LabeledContent(
                             "Gói phiên đã giải mã",
@@ -143,6 +169,16 @@ struct BandConnectionView: View {
                             "Lệnh mã hóa đã gửi",
                             value: "\(connection.sentCommandCount)"
                         )
+                    }
+                    if let preview = connection.lastDecryptedCommandPreview {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Gói giải mã gần nhất")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(preview)
+                                .font(.caption2.monospaced())
+                                .textSelection(.enabled)
+                        }
                     }
                     Text("Lệnh được mã hóa và gửi thẳng từ MiMaps qua Bluetooth; Mi Fitness không tham gia. Hãy kiểm tra cả màn hình Band và trạng thái ACK sau khi bấm thử.")
                         .font(.footnote)

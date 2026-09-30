@@ -15,6 +15,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     @Published private(set) var directNotificationState: MiBandDirectNotificationState = .unavailable
     @Published private(set) var decryptedPacketCount = 0
     @Published private(set) var sentCommandCount = 0
+    @Published private(set) var lastDecryptedCommandPreview: String?
 
     private enum StorageKey {
         static let peripheralIdentifier = "directMiBandPeripheralIdentifier"
@@ -301,6 +302,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             "Authentication phase: \(authenticationNotificationStage.rawValue)",
             "Direct notification: \(directNotificationState.localizedDescription)",
             "Decrypted session packets: \(decryptedPacketCount)",
+            "Last decrypted command: \(lastDecryptedCommandPreview ?? "—")",
             "Encrypted commands sent: \(sentCommandCount)",
             "Captured packets: \(capturedPackets.count)",
             ""
@@ -502,6 +504,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             let envelope = MiBandSessionProtocol.commandEnvelope(from: command)
             let type = envelope.type.map { String($0) } ?? "?"
             let subtype = envelope.subtype.map { String($0) } ?? "?"
+            lastDecryptedCommandPreview = MiBandCapturedPacket.preview(command, limit: 96)
             appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
         } catch {
             directNotificationState = .failed(error.localizedDescription)
@@ -593,6 +596,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         directNotificationState = .unavailable
         decryptedPacketCount = 0
         sentCommandCount = 0
+        lastDecryptedCommandPreview = nil
     }
 
     private func writeValue(_ data: Data, to characteristic: CBCharacteristic, peripheral: CBPeripheral) {
