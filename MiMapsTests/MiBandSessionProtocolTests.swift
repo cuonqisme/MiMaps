@@ -19,7 +19,10 @@ final class MiBandSessionProtocolTests: XCTestCase {
             counter: 1
         )
 
-        XCTAssertEqual(outgoing.prefix(6), Data([0x00, 0x00, 0x02, 0x01, 0x01, 0x00]))
+        XCTAssertEqual(
+            outgoing,
+            data("00000201010003CB8137FDDD5B59E67A")
+        )
         let simulatedIncoming = Data(outgoing.prefix(4)) + Data(outgoing.dropFirst(6))
         XCTAssertEqual(
             try MiBandSessionProtocol.decryptIncomingSingleFrame(
@@ -70,5 +73,16 @@ final class MiBandSessionProtocolTests: XCTestCase {
         XCTAssertLessThan(command.count, 220)
         XCTAssertNotNil(command.range(of: Data("➡️".utf8)))
         XCTAssertNotNil(command.range(of: Data("đường".utf8)))
+    }
+
+    private func data(_ hex: String) -> Data {
+        var output = Data()
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2)
+            output.append(UInt8(hex[index..<next], radix: 16)!)
+            index = next
+        }
+        return output
     }
 }
