@@ -3,7 +3,12 @@ import Foundation
 @MainActor
 protocol MiBandDirectNotificationSending: AnyObject {
     var canSendDirectNotifications: Bool { get }
-    func sendDirectNotification(title: String, body: String, label: String)
+    func sendDirectNotification(
+        title: String,
+        body: String,
+        label: String,
+        maneuver: NavigationManeuver?
+    )
 }
 
 extension MiBandDirectConnection: MiBandDirectNotificationSending {}
@@ -63,7 +68,8 @@ final class DirectMiBandTransport: BandTransport {
             directSender.sendDirectNotification(
                 title: content.title,
                 body: content.body,
-                label: "bước \(instruction.stepIdentifier)"
+                label: "bước \(instruction.stepIdentifier)",
+                maneuver: instruction.maneuver
             )
         }
 

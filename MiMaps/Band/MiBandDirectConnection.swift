@@ -16,6 +16,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     @Published private(set) var decryptedPacketCount = 0
     @Published private(set) var sentCommandCount = 0
     @Published private(set) var lastDecryptedCommandPreview: String?
+    @Published private(set) var lastIconRequestDescription: String?
 
     private enum StorageKey {
         static let peripheralIdentifier = "directMiBandPeripheralIdentifier"
@@ -35,6 +36,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var nextNotificationIdentifier: UInt32 = 1
     private var queuedCommands: [QueuedCommand] = []
     private var pendingCommand: QueuedCommand?
+    private var lastNavigationManeuver: NavigationManeuver?
     private let defaults: UserDefaults
     private let now: () -> Date
     private let credentialStore: MiBandCredentialStoring
@@ -229,14 +231,16 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         sendDirectNotification(
             title: "← 100 m",
             body: "Rẽ trái · MiMaps",
-            label: "thông báo thử"
+            label: "thông báo thử",
+            maneuver: .left
         )
     }
 
     func sendDirectNotification(
         title: String,
         body: String,
-        label: String = "chỉ dẫn điều hướng"
+        label: String = "chỉ dẫn điều hướng",
+        maneuver: NavigationManeuver? = nil
     ) {
         guard canSendDirectNotifications else {
             directNotificationState = .failed("Hãy kết nối và xác thực Band trước khi gửi.")
@@ -251,8 +255,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         )
         nextNotificationIdentifier &+= 1
         if nextNotificationIdentifier == 0 { nextNotificationIdentifier = 1 }
-        queuedCommands.append(QueuedCommand(id: UUID(), label: label, command: command))
-        sendNextQueuedCommandIfPossible()
+        lastNavigationManeuver = maneuver
+        enqueueCommand(command, label: label)
     }
 
     func forgetDevice() {
@@ -303,6 +307,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             "Direct notification: \(directNotificationState.localizedDescription)",
             "Decrypted session packets: \(decryptedPacketCount)",
             "Last decrypted command: \(lastDecryptedCommandPreview ?? "—")",
+            "Last icon request: \(lastIconRequestDescription ?? "—")",
             "Encrypted commands sent: \(sentCommandCount)",
             "Captured packets: \(capturedPackets.count)",
             ""
@@ -506,10 +511,28 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             let subtype = envelope.subtype.map { String($0) } ?? "?"
             lastDecryptedCommandPreview = MiBandCapturedPacket.preview(command, limit: 96)
             appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
+
+            if let package = try MiBandNotificationIconProtocol.packageQuery(from: command) {
+                lastIconRequestDescription = "query package=\(package)"
+                appendEvent("Band yêu cầu icon cho package \(package); gửi phản hồi an toàn")
+                enqueueCommand(
+                    MiBandNotificationIconProtocol.makePackageReply(package: package),
+                    label: "phản hồi icon \(package)"
+                )
+            } else if let request = try MiBandNotificationIconProtocol.iconRequest(from: command) {
+                let maneuver = lastNavigationManeuver.map { String(describing: $0) } ?? "unknown"
+                lastIconRequestDescription = "status=\(request.status), format=\(request.pixelFormat), size=\(request.size), maneuver=\(maneuver)"
+                appendEvent("Band yêu cầu dữ liệu icon: \(lastIconRequestDescription ?? "—")")
+            }
         } catch {
             directNotificationState = .failed(error.localizedDescription)
             appendEvent("Đã ACK nhưng không giải mã được gói phiên: \(error.localizedDescription)")
         }
+    }
+
+    private func enqueueCommand(_ command: Data, label: String) {
+        queuedCommands.append(QueuedCommand(id: UUID(), label: label, command: command))
+        sendNextQueuedCommandIfPossible()
     }
 
     private func sendNextQueuedCommandIfPossible() {
@@ -597,6 +620,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         decryptedPacketCount = 0
         sentCommandCount = 0
         lastDecryptedCommandPreview = nil
+        lastIconRequestDescription = nil
+        lastNavigationManeuver = nil
     }
 
     private func writeValue(_ data: Data, to characteristic: CBCharacteristic, peripheral: CBPeripheral) {

@@ -167,7 +167,12 @@ private final class DirectSenderSpy: MiBandDirectNotificationSending {
         canSendDirectNotifications = canSend
     }
 
-    func sendDirectNotification(title: String, body: String, label: String) {
+    func sendDirectNotification(
+        title: String,
+        body: String,
+        label: String,
+        maneuver: NavigationManeuver?
+    ) {
         messages.append(Message(title: title, body: body, label: label))
     }
 }

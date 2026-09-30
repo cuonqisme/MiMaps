@@ -180,6 +180,16 @@ struct BandConnectionView: View {
                                 .textSelection(.enabled)
                         }
                     }
+                    if let iconRequest = connection.lastIconRequestDescription {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Yêu cầu icon từ Band")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(iconRequest)
+                                .font(.caption2.monospaced())
+                                .textSelection(.enabled)
+                        }
+                    }
                     Text("Lệnh được mã hóa và gửi thẳng từ MiMaps qua Bluetooth; Mi Fitness không tham gia. Hãy kiểm tra cả màn hình Band và trạng thái ACK sau khi bấm thử.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
