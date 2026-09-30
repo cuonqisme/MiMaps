@@ -12,6 +12,9 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     @Published private(set) var isCapturingPackets = false
     @Published private(set) var savedKeyFingerprint: String?
     @Published private(set) var authenticationState: MiBandAuthenticationState = .missingKey
+    @Published private(set) var directNotificationState: MiBandDirectNotificationState = .unavailable
+    @Published private(set) var decryptedPacketCount = 0
+    @Published private(set) var sentCommandCount = 0
 
     private enum StorageKey {
         static let peripheralIdentifier = "directMiBandPeripheralIdentifier"
@@ -27,6 +30,10 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var authenticationNotificationStage: AuthenticationNotificationStage = .idle
     private var lastConnectedDeviceName: String?
     private var lastConnectedDeviceIdentifier: UUID?
+    private var outgoingEncryptionCounter: UInt16 = 1
+    private var nextNotificationIdentifier: UInt32 = 1
+    private var queuedCommands: [QueuedCommand] = []
+    private var pendingCommand: QueuedCommand?
     private let defaults: UserDefaults
     private let now: () -> Date
     private let credentialStore: MiBandCredentialStoring
@@ -35,6 +42,12 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         let secretKey: Data
         let phoneNonce: Data
         var sessionKeys: MiBandSessionKeys?
+    }
+
+    private struct QueuedCommand: Equatable {
+        let id: UUID
+        let label: String
+        let command: Data
     }
 
     private enum ProtocolCharacteristic {
@@ -72,6 +85,12 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
 
     var hasSavedDevice: Bool {
         defaults.string(forKey: StorageKey.peripheralIdentifier) != nil
+    }
+
+    var canSendDirectNotifications: Bool {
+        state.isReady
+            && authenticationState == .authenticated
+            && authenticationContext?.sessionKeys != nil
     }
 
     func startScan() {
@@ -205,6 +224,36 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         }
     }
 
+    func sendTestNavigationNotification() {
+        sendDirectNotification(
+            title: "← 100 m",
+            body: "Rẽ trái · MiMaps",
+            label: "thông báo thử"
+        )
+    }
+
+    func sendDirectNotification(
+        title: String,
+        body: String,
+        label: String = "chỉ dẫn điều hướng"
+    ) {
+        guard canSendDirectNotifications else {
+            directNotificationState = .failed("Hãy kết nối và xác thực Band trước khi gửi.")
+            appendEvent("Không thể gửi trực tiếp: phiên bảo mật chưa sẵn sàng")
+            return
+        }
+        let command = MiBandNotificationProtocol.makeNotificationCommand(
+            id: nextNotificationIdentifier,
+            title: title,
+            body: body,
+            date: now()
+        )
+        nextNotificationIdentifier &+= 1
+        if nextNotificationIdentifier == 0 { nextNotificationIdentifier = 1 }
+        queuedCommands.append(QueuedCommand(id: UUID(), label: label, command: command))
+        sendNextQueuedCommandIfPossible()
+    }
+
     func forgetDevice() {
         disconnect()
         defaults.removeObject(forKey: StorageKey.peripheralIdentifier)
@@ -213,6 +262,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         characteristicHandles = [:]
         capturedPackets = []
         isCapturingPackets = false
+        resetSecureSession()
         state = .idle
         appendEvent("Đã quên thiết bị")
     }
@@ -249,6 +299,9 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             "Authentication key: \(savedKeyFingerprint == nil ? "not configured" : "configured")",
             "Authentication: \(authenticationState.localizedDescription)",
             "Authentication phase: \(authenticationNotificationStage.rawValue)",
+            "Direct notification: \(directNotificationState.localizedDescription)",
+            "Decrypted session packets: \(decryptedPacketCount)",
+            "Encrypted commands sent: \(sentCommandCount)",
             "Captured packets: \(capturedPackets.count)",
             ""
         ]
@@ -346,9 +399,31 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         characteristic: CBCharacteristic,
         peripheral: CBPeripheral
     ) {
-        guard let service = characteristic.service?.uuid,
-              Self.characteristicKey(service: service, characteristic: characteristic.uuid)
-                == ProtocolCharacteristic.commandRead,
+        guard let service = characteristic.service?.uuid else { return }
+        let characteristicKey = Self.characteristicKey(
+            service: service,
+            characteristic: characteristic.uuid
+        )
+        guard characteristicKey == ProtocolCharacteristic.commandRead
+                || characteristicKey == ProtocolCharacteristic.commandWrite else { return }
+
+        if let result = MiBandSessionProtocol.acknowledgementResult(from: data) {
+            handleCommandAcknowledgement(result)
+            return
+        }
+
+        if characteristicKey == ProtocolCharacteristic.commandRead,
+           MiBandSessionProtocol.isEncryptedSingleFrame(data) {
+            writeValue(
+                MiBandSessionProtocol.acknowledgement,
+                to: characteristic,
+                peripheral: peripheral
+            )
+            handleEncryptedSessionPacket(data)
+            return
+        }
+
+        guard characteristicKey == ProtocolCharacteristic.commandRead,
               let payload = MiBandAuthProtocol.plaintextPayload(from: data) else { return }
 
         writeValue(
@@ -398,6 +473,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                 authenticationAttemptID = nil
                 authenticationNotificationStage = .idle
                 authenticationState = .authenticated
+                outgoingEncryptionCounter = 1
+                directNotificationState = .ready
                 appendEvent("Xác thực trực tiếp Xiaomi Smart Band 8 thành công")
             default:
                 break
@@ -408,6 +485,114 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         } catch {
             failAuthentication(error.localizedDescription)
         }
+    }
+
+    private func handleEncryptedSessionPacket(_ data: Data) {
+        guard authenticationState == .authenticated,
+              let sessionKeys = authenticationContext?.sessionKeys else {
+            appendEvent("Đã ACK khung mã hóa nhưng chưa có khóa phiên để giải mã")
+            return
+        }
+        do {
+            let command = try MiBandSessionProtocol.decryptIncomingSingleFrame(
+                data,
+                sessionKeys: sessionKeys
+            )
+            decryptedPacketCount += 1
+            let envelope = MiBandSessionProtocol.commandEnvelope(from: command)
+            let type = envelope.type.map { String($0) } ?? "?"
+            let subtype = envelope.subtype.map { String($0) } ?? "?"
+            appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
+        } catch {
+            directNotificationState = .failed(error.localizedDescription)
+            appendEvent("Đã ACK nhưng không giải mã được gói phiên: \(error.localizedDescription)")
+        }
+    }
+
+    private func sendNextQueuedCommandIfPossible() {
+        guard pendingCommand == nil, !queuedCommands.isEmpty else { return }
+        guard canSendDirectNotifications,
+              let peripheral = connectedPeripheral,
+              let write = characteristicHandles[ProtocolCharacteristic.commandWrite],
+              let sessionKeys = authenticationContext?.sessionKeys else {
+            queuedCommands.removeAll()
+            directNotificationState = .failed("Phiên bảo mật không còn sẵn sàng.")
+            return
+        }
+
+        let item = queuedCommands.removeFirst()
+        do {
+            let frame = try MiBandSessionProtocol.makeEncryptedSingleFrame(
+                command: item.command,
+                sessionKeys: sessionKeys,
+                counter: outgoingEncryptionCounter
+            )
+            let writeType: CBCharacteristicWriteType = write.properties.contains(.write)
+                ? .withResponse
+                : .withoutResponse
+            let maximumLength = peripheral.maximumWriteValueLength(for: writeType)
+            guard frame.count <= maximumLength else {
+                directNotificationState = .failed(
+                    "Thông báo \(frame.count) byte vượt giới hạn GATT \(maximumLength) byte."
+                )
+                appendEvent("Dừng gửi \(item.label): khung quá dài \(frame.count)/\(maximumLength) byte")
+                sendNextQueuedCommandIfPossible()
+                return
+            }
+
+            pendingCommand = item
+            directNotificationState = .sending(item.label)
+            writeValue(frame, to: write, peripheral: peripheral)
+            sentCommandCount += 1
+            appendEvent(
+                "Gửi lệnh mã hóa #\(sentCommandCount), counter=\(outgoingEncryptionCounter), \(frame.count) byte: \(item.label)"
+            )
+            if outgoingEncryptionCounter == UInt16.max {
+                outgoingEncryptionCounter = 0
+            } else {
+                outgoingEncryptionCounter += 1
+            }
+            scheduleCommandAcknowledgementTimeout(for: item.id)
+        } catch {
+            directNotificationState = .failed(error.localizedDescription)
+            appendEvent("Không thể gửi \(item.label): \(error.localizedDescription)")
+            sendNextQueuedCommandIfPossible()
+        }
+    }
+
+    private func handleCommandAcknowledgement(_ result: UInt8) {
+        guard let item = pendingCommand else { return }
+        pendingCommand = nil
+        if result == 0 {
+            directNotificationState = .delivered(item.label)
+            appendEvent("Band ACK lệnh trực tiếp: \(item.label)")
+        } else {
+            directNotificationState = .failed("Band trả ACK mã \(result) cho \(item.label).")
+            appendEvent("Band từ chối lệnh \(item.label), ACK=\(result)")
+        }
+        sendNextQueuedCommandIfPossible()
+    }
+
+    private func scheduleCommandAcknowledgementTimeout(for id: UUID) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(6))
+            guard let self, self.pendingCommand?.id == id else { return }
+            let label = self.pendingCommand?.label ?? "lệnh"
+            self.pendingCommand = nil
+            self.directNotificationState = .failed("Band không ACK \(label).")
+            self.appendEvent("Hết thời gian chờ Band ACK: \(label)")
+            self.sendNextQueuedCommandIfPossible()
+        }
+    }
+
+    private func resetSecureSession() {
+        authenticationContext = nil
+        outgoingEncryptionCounter = 1
+        queuedCommands.removeAll()
+        pendingCommand = nil
+        directNotificationState = .unavailable
+        decryptedPacketCount = 0
+        sentCommandCount = 0
     }
 
     private func writeValue(_ data: Data, to characteristic: CBCharacteristic, peripheral: CBPeripheral) {
@@ -429,7 +614,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
 
     private func failAuthentication(_ message: String) {
         authenticationAttemptID = nil
-        authenticationContext = nil
+        resetSecureSession()
         authenticationNotificationStage = .idle
         authenticationState = .failed(message)
         appendEvent("Xác thực thất bại: \(message)")
@@ -525,7 +710,7 @@ extension MiBandDirectConnection: @preconcurrency CBCentralManagerDelegate {
         characteristicHandles = [:]
         pendingServiceUUIDs = []
         authenticationAttemptID = nil
-        authenticationContext = nil
+        resetSecureSession()
         authenticationNotificationStage = .idle
         authenticationState = savedKeyFingerprint == nil ? .missingKey : .ready
         peripheral.delegate = self
@@ -555,7 +740,7 @@ extension MiBandDirectConnection: @preconcurrency CBCentralManagerDelegate {
         pendingServiceUUIDs = []
         characteristicHandles = [:]
         authenticationAttemptID = nil
-        authenticationContext = nil
+        resetSecureSession()
         authenticationNotificationStage = .idle
         if interruptedAuthentication {
             authenticationState = .failed("Band ngắt kết nối khi đang \(interruptedPhase).")
@@ -651,6 +836,12 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
             appendEvent("Ghi \(key) thất bại: \(error.localizedDescription)")
             if authenticationState.isInProgress {
                 failAuthentication("Không thể ghi \(key): \(error.localizedDescription)")
+            } else if key == ProtocolCharacteristic.commandWrite,
+                      let item = pendingCommand {
+                pendingCommand = nil
+                directNotificationState = .failed(error.localizedDescription)
+                appendEvent("Gửi trực tiếp \(item.label) thất bại ở tầng GATT")
+                sendNextQueuedCommandIfPossible()
             }
         } else if authenticationState.isInProgress {
             appendEvent("Ghi \(key) thành công ở tầng GATT")

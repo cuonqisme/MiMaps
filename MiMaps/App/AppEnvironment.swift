@@ -27,15 +27,17 @@ final class AppEnvironment: ObservableObject {
             preferencesProvider: { settings.routePreferences }
         )
         let miBandConnection = MiBandDirectConnection()
-        let bandTransport = NotificationBandTransport(
+        let bandTransport = DirectMiBandTransport(
             scheduler: localNotificationService,
+            directSender: miBandConnection,
             notificationsEnabled: { settings.bandNotificationsEnabled },
             soundEnabled: { settings.notificationSoundEnabled },
             speedLimitEnabled: { settings.showSpeedLimit },
             displayStyle: { settings.bandDisplayStyle }
         )
-        let liveBandTransport = NotificationBandTransport(
+        let liveBandTransport = DirectMiBandTransport(
             scheduler: localNotificationService,
+            directSender: miBandConnection,
             notificationsEnabled: { settings.bandNotificationsEnabled },
             soundEnabled: { settings.notificationSoundEnabled },
             speedLimitEnabled: { settings.showSpeedLimit },

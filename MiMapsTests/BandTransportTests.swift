@@ -80,6 +80,51 @@ final class BandTransportTests: XCTestCase {
         XCTAssertTrue(scheduler.contents.first?.body.contains("\n2 phút · 1 km · đến ") == true)
     }
 
+    func testDirectTransportMirrorsInstructionToAuthenticatedBand() async throws {
+        let scheduler = BandSchedulerSpy()
+        let sender = DirectSenderSpy(canSend: true)
+        let transport = DirectMiBandTransport(
+            scheduler: scheduler,
+            directSender: sender
+        )
+
+        try await transport.start()
+        try await transport.send(instruction(step: "direct", distance: 100))
+
+        XCTAssertEqual(scheduler.contents.count, 1)
+        XCTAssertEqual(sender.messages.count, 1)
+        XCTAssertEqual(sender.messages.first?.title, "→ 100 m")
+        XCTAssertEqual(sender.messages.first?.body, "Rẽ phải · Trần Phú")
+    }
+
+    func testDirectTransportKeepsPhoneNotificationWhenBandIsUnavailable() async throws {
+        let scheduler = BandSchedulerSpy()
+        let sender = DirectSenderSpy(canSend: false)
+        let transport = DirectMiBandTransport(
+            scheduler: scheduler,
+            directSender: sender
+        )
+
+        try await transport.start()
+        try await transport.send(instruction(step: "phone-only", distance: 100))
+
+        XCTAssertEqual(scheduler.contents.count, 1)
+        XCTAssertTrue(sender.messages.isEmpty)
+    }
+
+    func testDirectTransportDoesNotDependOnPhoneNotificationPermission() async throws {
+        let sender = DirectSenderSpy(canSend: true)
+        let transport = DirectMiBandTransport(
+            scheduler: FailingBandScheduler(),
+            directSender: sender
+        )
+
+        try await transport.start()
+        try await transport.send(instruction(step: "ble-only", distance: 80))
+
+        XCTAssertEqual(sender.messages.count, 1)
+    }
+
     func testDeduplicatorResetsForNewStep() {
         var deduplicator = BandInstructionDeduplicator()
         let first = instruction(step: "one", distance: 80)
@@ -97,6 +142,33 @@ private final class BandSchedulerSpy: LocalNotificationScheduling {
 
     func schedule(_ content: NavigationNotificationContent) async throws {
         contents.append(content)
+    }
+}
+
+@MainActor
+private final class FailingBandScheduler: LocalNotificationScheduling {
+    func schedule(_ content: NavigationNotificationContent) async throws {
+        throw LocalNotificationError.permissionDenied
+    }
+}
+
+@MainActor
+private final class DirectSenderSpy: MiBandDirectNotificationSending {
+    struct Message: Equatable {
+        let title: String
+        let body: String
+        let label: String
+    }
+
+    let canSendDirectNotifications: Bool
+    private(set) var messages: [Message] = []
+
+    init(canSend: Bool) {
+        canSendDirectNotifications = canSend
+    }
+
+    func sendDirectNotification(title: String, body: String, label: String) {
+        messages.append(Message(title: title, body: body, label: label))
     }
 }
 

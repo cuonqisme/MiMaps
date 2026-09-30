@@ -73,6 +73,24 @@ enum MiBandAuthenticationState: Equatable, Sendable {
     }
 }
 
+enum MiBandDirectNotificationState: Equatable, Sendable {
+    case unavailable
+    case ready
+    case sending(String)
+    case delivered(String)
+    case failed(String)
+
+    var localizedDescription: String {
+        switch self {
+        case .unavailable: "Chưa sẵn sàng"
+        case .ready: "Sẵn sàng gửi trực tiếp"
+        case let .sending(label): "Đang gửi: \(label)"
+        case let .delivered(label): "Band đã nhận: \(label)"
+        case let .failed(message): "Lỗi: \(message)"
+        }
+    }
+}
+
 enum MiBandDeviceMatcher {
     static func isMiBand8(name: String?) -> Bool {
         guard let normalized = name?
