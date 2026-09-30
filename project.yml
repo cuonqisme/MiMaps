@@ -39,6 +39,8 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UIBackgroundModes:
           - location
+          - bluetooth-central
+        NSBluetoothAlwaysUsageDescription: "MiMaps kết nối trực tiếp với Xiaomi Smart Band 8 để cấu hình thiết bị và gửi chỉ dẫn điều hướng."
         NSLocationWhenInUseUsageDescription: "Vị trí của bạn được dùng để cung cấp chỉ đường từng chặng khi phiên điều hướng đang hoạt động."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Vị trí của bạn được dùng để tiếp tục chỉ đường khi khóa màn hình hoặc chuyển ứng dụng."
         NSMotionUsageDescription: "Dữ liệu chuyển động giúp cải thiện độ chính xác khi theo dõi tuyến đường."

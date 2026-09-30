@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject private var settings: AppSettings
     private let permissionManager: NotificationPermissionManaging
     @ObservedObject private var locationPermissionManager: LocationPermissionManager
+    @ObservedObject private var miBandConnection: MiBandDirectConnection
     @State private var permissionStatus: NotificationPermissionStatus = .notDetermined
     @State private var permissionError: String?
 
@@ -12,6 +13,7 @@ struct SettingsView: View {
         _settings = ObservedObject(wrappedValue: environment.settings)
         permissionManager = environment.notificationPermissionManager
         _locationPermissionManager = ObservedObject(wrappedValue: environment.locationPermissionManager)
+        _miBandConnection = ObservedObject(wrappedValue: environment.miBandConnection)
     }
 
     var body: some View {
@@ -44,6 +46,11 @@ struct SettingsView: View {
             }
 
             Section("Thông báo Mi Band") {
+                NavigationLink {
+                    BandConnectionView(connection: miBandConnection)
+                } label: {
+                    LabeledContent("Kết nối Mi Band 8", value: miBandConnection.state.localizedDescription)
+                }
                 Toggle("Bật thông báo điều hướng", isOn: $settings.bandNotificationsEnabled)
                 Toggle("Âm thanh trên điện thoại", isOn: $settings.notificationSoundEnabled)
                 Picker("Kiểu hiển thị", selection: $settings.bandDisplayStyle) {
@@ -63,7 +70,7 @@ struct SettingsView: View {
                 Button("Cho phép thông báo") {
                     Task { await requestNotificationPermission() }
                 }
-                Text("Mi Band 9 trên iPhone chỉ nhận nội dung chữ do iOS/Mi Fitness chuyển tiếp. MiMaps dùng các mũi tên chữ cơ bản ← ↑ → để tránh lỗi ô vuông; kích thước và bố cục cuối cùng do firmware của vòng tay quyết định.")
+                Text("Band Lab kết nối trực tiếp bằng Bluetooth và không sử dụng Mi Fitness. Trong giai đoạn nhận diện giao thức, thông báo điều hướng cũ vẫn chỉ xuất hiện trên iPhone.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -119,7 +126,7 @@ struct SettingsView: View {
                 NavigationLink("Pháp lý và quyền riêng tư") {
                     LegalView()
                 }
-                Text("MiMaps không kết nối BLE riêng với Xiaomi Smart Band. Thông báo được chuyển tiếp bởi iOS và Mi Fitness.")
+                Text("MiMaps đang triển khai companion Bluetooth trực tiếp cho Xiaomi Smart Band 8. Không cần kết nối Mi Fitness trong chế độ Band Lab.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

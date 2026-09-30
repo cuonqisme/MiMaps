@@ -14,6 +14,7 @@ final class AppEnvironment: ObservableObject {
     let liveNavigationProvider: AppleNavigationProvider
     let liveNavigationCoordinator: NavigationCoordinator
     let navigationPermissionPreflight: NavigationPermissionPreflight
+    let miBandConnection: MiBandDirectConnection
 
     init() {
         let settings = AppSettings()
@@ -25,6 +26,7 @@ final class AppEnvironment: ObservableObject {
         let liveNavigationProvider = AppleNavigationProvider(
             preferencesProvider: { settings.routePreferences }
         )
+        let miBandConnection = MiBandDirectConnection()
         let bandTransport = NotificationBandTransport(
             scheduler: localNotificationService,
             notificationsEnabled: { settings.bandNotificationsEnabled },
@@ -48,6 +50,7 @@ final class AppEnvironment: ObservableObject {
         sharedLocationImporter = GoogleMapsLocationImporter(searchService: placesSearchService)
         self.locationPermissionManager = locationPermissionManager
         self.liveNavigationProvider = liveNavigationProvider
+        self.miBandConnection = miBandConnection
         navigationPermissionPreflight = NavigationPermissionPreflight(
             locationManager: locationPermissionManager,
             notificationManager: notificationPermissionManager
