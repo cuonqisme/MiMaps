@@ -17,6 +17,38 @@ uploaded notification icon. The package identifier must remain `com.mimaps`;
 physical testing showed that direction-specific aliases were ACKed and then
 silently ignored by the Band notification service.
 
+## Evidence from the paired device and Mi Fitness export
+
+This conclusion is not based only on Notify's public feature list. The Mi
+Fitness data exported from the test iPhone identifies this exact product as:
+
+- product name: `Xiaomi Smart Band 8`
+- model: `miwear.watch.m66gl`
+- product id: `11817`
+- screen: `192 x 490`
+
+Its device capability list contains notification, notification action,
+watchface, launcher, widget, media, health and other built-in features. It does
+not contain `thirdparty_app`, `application`, Quick App, Vela or RPK support.
+The words `application` and `third_app` elsewhere in the same archive belong to
+the Mi Fitness/Zepp Life phone application descriptor, not to the Band 8 device
+object.
+
+The exported Mi Fitness directory contains zero `.rpk` packages and one Band 8
+watchface `.bin`. That file begins with the Band watchface magic
+`5A A5 34 12`; it is not an RPK archive. The reverse-engineered Xiaomi BLE
+data-upload service likewise exposes only these payload classes for this
+protocol:
+
+- `16`: watchface
+- `32`: firmware
+- `50`: notification icon
+
+There is no RPK/application upload type or install command in the Band 8 FE95
+command schema. A watchface format may contain an object named `App` or an
+interactive action, but that is still a `.bin` watchface object. It does not
+provide the Xiaomi Vela JavaScript runtime or accept a `.rpk` package.
+
 ## Why MiMaps does not push an RPK to this device
 
 - Notify's native **Notify Maps** RPK page lists Mi Band 9/10 and devices that
@@ -27,6 +59,11 @@ silently ignored by the Band notification service.
 - Xiaomi's official real-device RPK procedure requires a development build of
   Mi Fitness and matching phone/RPK certificates. The public procedure is not
   a raw FE95 file upload.
+- The public Xiaomi BLE command implementation used for cross-checking exposes
+  watchface, firmware and notification-icon uploads, but no RPK installer.
+- Community Vela tooling targets Band 8 **Pro** and newer Vela bands. Separate
+  standard Band 8 firmware research reaches custom code only by replacing the
+  firmware through physical SWD flashing.
 - Sending an RPK through the watchface or firmware upload type would be an
   invalid package operation and can leave the device unusable. MiMaps refuses
   to do this.
@@ -37,6 +74,10 @@ References:
 - <https://www.mibandnotify.com/xiaomi-mi-band/notify-maps.php>
 - <https://iot.mi.com/vela/quickapp/en/guide/multi-screens/>
 - <https://iot.mi.com/vela/quickapp/en/guide/other/faq.html>
+- <https://iot.mi.com/vela/quickapp/en/features/network/interconnect.html>
+- <https://github.com/oryonatan/xiaomi-band-development>
+- <https://github.com/atc1441/ATCmiBand8fw>
+- <https://gist.github.com/Doliman100/c4d22766c4288ad0e025fb3eba066289>
 
 ## Supported implementation tracks
 
