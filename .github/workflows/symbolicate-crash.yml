@@ -1,0 +1,59 @@
+name: Symbolicate iOS Crash
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Workflow run containing the matching release artifact
+        required: true
+        type: string
+      artifact_name:
+        description: Exact release artifact name
+        required: true
+        type: string
+      load_address:
+        description: Decimal or hexadecimal MiMaps image load address from the IPS report
+        required: true
+        type: string
+      addresses:
+        description: Space-separated crash instruction addresses
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  symbolicate:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - name: Download matching release symbols
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: symbols
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.release_run_id }}
+
+      - name: Symbolicate MiMaps frames
+        env:
+          LOAD_ADDRESS: ${{ inputs.load_address }}
+          CRASH_ADDRESSES: ${{ inputs.addresses }}
+        run: |
+          set -euo pipefail
+          dwarf_binary="$(find symbols -type f -path '*/MiMaps.app.dSYM/Contents/Resources/DWARF/MiMaps' -print -quit)"
+          if [[ -z "${dwarf_binary}" ]]; then
+            echo "Matching MiMaps dSYM was not found in the release artifact." >&2
+            exit 1
+          fi
+
+          echo "dSYM: ${dwarf_binary}"
+          dwarfdump --uuid "${dwarf_binary}"
+          read -r -a crash_addresses <<< "${CRASH_ADDRESSES}"
+          xcrun atos \
+            -arch arm64 \
+            -o "${dwarf_binary}" \
+            -l "${LOAD_ADDRESS}" \
+            "${crash_addresses[@]}"
