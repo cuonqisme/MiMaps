@@ -85,8 +85,50 @@ enum MiBandDirectNotificationState: Equatable, Sendable {
         case .unavailable: "Chưa sẵn sàng"
         case .ready: "Sẵn sàng gửi trực tiếp"
         case let .sending(label): "Đang gửi: \(label)"
-        case let .delivered(label): "Band đã nhận: \(label)"
+        case let .delivered(label): "Band đã ACK gói: \(label)"
         case let .failed(message): "Lỗi: \(message)"
+        }
+    }
+}
+
+enum MiBandOnDeviceAppSupport: Equatable, Sendable {
+    case velaRPK
+    case watchfaceAndPictureMode
+    case unknown
+
+    static func detect(deviceName: String?) -> Self {
+        guard let normalized = deviceName?
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !normalized.isEmpty else {
+            return .unknown
+        }
+
+        if normalized.contains("band 8 pro")
+            || normalized.contains("band8 pro")
+            || normalized.contains("band 9")
+            || normalized.contains("band9")
+            || normalized.contains("band 10")
+            || normalized.contains("band10") {
+            return .velaRPK
+        }
+
+        if MiBandDeviceMatcher.isMiBand8(name: normalized) {
+            return .watchfaceAndPictureMode
+        }
+
+        return .unknown
+    }
+
+    var localizedDescription: String {
+        switch self {
+        case .velaRPK:
+            "Có runtime Xiaomi Vela/RPK"
+        case .watchfaceAndPictureMode:
+            "Không có runtime RPK; dùng picture mode/watchface"
+        case .unknown:
+            "Chưa xác định"
         }
     }
 }

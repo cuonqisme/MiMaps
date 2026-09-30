@@ -128,12 +128,28 @@ struct BandConnectionView: View {
             }
 
             if connection.authenticationState == .authenticated {
+                Section("Ứng dụng trên vòng") {
+                    let appSupport = MiBandOnDeviceAppSupport.detect(
+                        deviceName: connection.connectedDeviceName
+                    )
+                    LabeledContent("Khả năng cài app", value: appSupport.localizedDescription)
+                    if appSupport == .watchfaceAndPictureMode {
+                        Text("Xiaomi Smart Band 8 bản thường không có Xiaomi Vela Quick App runtime, vì vậy không thể cài RPK một cách hợp lệ. MiMaps sẽ dùng giao thức picture mode/icon qua FE95; RPK chỉ dành cho Band 8 Pro, Band 9/10 và các mẫu Vela tương thích.")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    } else if appSupport == .velaRPK {
+                        Text("Thiết bị có thể chạy RPK, nhưng cài đặt thật cần Mi Fitness bản phát triển và chứng thư ghép cặp do Xiaomi cấp; phiên BLE FE95 không phải trình cài RPK.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Thông báo trực tiếp") {
                     LabeledContent(
                         "Trạng thái",
                         value: connection.directNotificationState.localizedDescription
                     )
-                    Button("Gửi thử: rẽ trái sau 100 m") {
+                    Button("Gửi thử picture mode: rẽ trái sau 100 m") {
                         connection.sendTestNavigationNotification()
                     }
                     Button("Xem thẻ điều hướng Band 8") {
@@ -194,7 +210,7 @@ struct BandConnectionView: View {
                         "Upload icon mũi tên",
                         value: connection.iconUploadDescription
                     )
-                    Text("Lệnh được mã hóa và gửi thẳng từ MiMaps qua Bluetooth; Mi Fitness không tham gia. Hãy kiểm tra cả màn hình Band và trạng thái ACK sau khi bấm thử.")
+                    Text("Lệnh được mã hóa và gửi thẳng từ MiMaps qua Bluetooth; Mi Fitness không tham gia. ACK chỉ xác nhận Band nhận khung giao thức, không xác nhận giao diện đã được hiển thị. Hãy kiểm tra thêm yêu cầu icon và trạng thái upload.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

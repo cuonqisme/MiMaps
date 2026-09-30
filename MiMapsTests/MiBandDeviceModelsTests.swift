@@ -20,6 +20,22 @@ final class MiBandDeviceModelsTests: XCTestCase {
         XCTAssertFalse(MiBandConnectionState.disconnected.isReady)
     }
 
+    func testDetectsOnDeviceApplicationRuntime() {
+        XCTAssertEqual(
+            MiBandOnDeviceAppSupport.detect(deviceName: "Xiaomi Smart Band 8 3D99"),
+            .watchfaceAndPictureMode
+        )
+        XCTAssertEqual(
+            MiBandOnDeviceAppSupport.detect(deviceName: "Xiaomi Smart Band 8 Pro"),
+            .velaRPK
+        )
+        XCTAssertEqual(
+            MiBandOnDeviceAppSupport.detect(deviceName: "Xiaomi Smart Band 9"),
+            .velaRPK
+        )
+        XCTAssertEqual(MiBandOnDeviceAppSupport.detect(deviceName: nil), .unknown)
+    }
+
     func testAuthenticationKeyNormalization() {
         XCTAssertEqual(
             MiBandAuthenticationKey.normalize("0011-2233-4455-6677-8899-aabb-ccdd-eeff"),

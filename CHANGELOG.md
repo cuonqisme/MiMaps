@@ -6,6 +6,10 @@ Application/project rename in this release: MiMaps replaces the former product n
 
 ## 0.1.0 — in development
 
+- Restored the firmware-accepted `com.mimaps` notification package after physical Band 8 testing showed that per-maneuver package aliases were ACKed but not rendered.
+- Distinguished a Bluetooth transport ACK from confirmed on-screen delivery in Band Lab diagnostics.
+- Added explicit on-device runtime detection: standard Band 8 uses picture mode/watchfaces and must not be sent Vela RPK packages; Band 8 Pro and Band 9/10 follow Xiaomi's separately signed RPK workflow.
+
 - Replaced the previous Google SDK integration with native Apple MapKit search, route preview, active guidance, and rerouting.
 - Added standard, muted, satellite, and hybrid map styles plus an unobstructed recenter control.
 - Added car, walking, transit, and motorcycle-request modes with an explicit automobile fallback when motorcycle is selected.

@@ -20,11 +20,20 @@ enum MiBandManeuverIconRendererError: LocalizedError, Equatable {
 @MainActor
 enum MiBandManeuverIconRenderer {
     static func packageName(for maneuver: NavigationManeuver?) -> String {
-        "com.mimaps.nav.\(token(for: maneuver))"
+        // Band 8 standard only requested an icon for this exact application
+        // identifier during physical-device testing. Direction-specific package
+        // aliases were ACKed at the transport layer but silently discarded by
+        // the notification service, so keep the package stable and associate
+        // the requested icon with `lastNavigationManeuver` instead.
+        "com.mimaps"
     }
 
     static func maneuver(forPackageName packageName: String) -> NavigationManeuver? {
-        guard let token = packageName.split(separator: ".").last.map(String.init) else {
+        // Retain parsing for diagnostics captured by the short-lived builds
+        // that used com.mimaps.nav.<maneuver>. Current builds deliberately use
+        // the stable com.mimaps package and fall back to lastNavigationManeuver.
+        guard packageName.hasPrefix("com.mimaps.nav."),
+              let token = packageName.split(separator: ".").last.map(String.init) else {
             return nil
         }
         return maneuver(for: token)
