@@ -12,11 +12,11 @@ on:
         required: true
         type: string
       load_address:
-        description: Decimal or hexadecimal MiMaps image load address from the IPS report
+        description: Hexadecimal MiMaps image load address from the IPS report
         required: true
         type: string
       addresses:
-        description: Space-separated crash instruction addresses
+        description: Space-separated hexadecimal crash instruction addresses
         required: true
         type: string
 

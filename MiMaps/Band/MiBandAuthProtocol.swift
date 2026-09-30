@@ -167,10 +167,16 @@ enum MiBandAuthProtocol {
     }
 
     static func plaintextPayload(from frame: Data) -> Data? {
-        guard frame.count >= 4,
-              frame[0] == 0, frame[1] == 0,
-              frame[2] == 2, frame[3] == 2 else { return nil }
-        return frame.dropFirst(4)
+        guard frame.count >= 4 else { return nil }
+        let start = frame.startIndex
+        guard frame[start] == 0,
+              frame[start + 1] == 0,
+              frame[start + 2] == 2,
+              frame[start + 3] == 2 else { return nil }
+        // `dropFirst` can retain the original Data indices (starting at 4).
+        // The protobuf decoder works with zero-based offsets, so materialize a
+        // new Data value before parsing data received from CoreBluetooth.
+        return Data(frame.dropFirst(4))
     }
 
     static let singlePacketAcknowledgement = Data([0x00, 0x00, 0x03, 0x00])
@@ -254,25 +260,32 @@ private struct ProtobufFields {
     private var byteFields: [UInt64: Data] = [:]
 
     init(_ data: Data) throws {
-        var offset = 0
-        while offset < data.count {
+        var offset = data.startIndex
+        while offset < data.endIndex {
             let key = try Self.readVarint(data, offset: &offset)
             let field = key >> 3
+            guard field != 0 else { throw MiBandAuthProtocolError.malformedResponse }
             switch key & 7 {
             case 0:
                 varints[field] = try Self.readVarint(data, offset: &offset)
             case 1:
-                guard offset + 8 <= data.count else { throw MiBandAuthProtocolError.malformedResponse }
+                guard data.distance(from: offset, to: data.endIndex) >= 8 else {
+                    throw MiBandAuthProtocolError.malformedResponse
+                }
                 offset += 8
             case 2:
                 let length = try Self.readVarint(data, offset: &offset)
-                guard length <= UInt64(Int.max) else { throw MiBandAuthProtocolError.malformedResponse }
-                let end = offset + Int(length)
-                guard end <= data.count else { throw MiBandAuthProtocolError.malformedResponse }
+                guard let byteCount = Int(exactly: length),
+                      byteCount <= data.distance(from: offset, to: data.endIndex) else {
+                    throw MiBandAuthProtocolError.malformedResponse
+                }
+                let end = offset + byteCount
                 byteFields[field] = data.subdata(in: offset..<end)
                 offset = end
             case 5:
-                guard offset + 4 <= data.count else { throw MiBandAuthProtocolError.malformedResponse }
+                guard data.distance(from: offset, to: data.endIndex) >= 4 else {
+                    throw MiBandAuthProtocolError.malformedResponse
+                }
                 offset += 4
             default:
                 throw MiBandAuthProtocolError.malformedResponse
@@ -286,10 +299,14 @@ private struct ProtobufFields {
     private static func readVarint(_ data: Data, offset: inout Int) throws -> UInt64 {
         var result: UInt64 = 0
         var shift: UInt64 = 0
-        while offset < data.count, shift < 64 {
+        while offset < data.endIndex, shift < 64 {
             let byte = data[offset]
             offset += 1
-            result |= UInt64(byte & 0x7F) << shift
+            let payload = UInt64(byte & 0x7F)
+            guard shift < 63 || payload <= 1 else {
+                throw MiBandAuthProtocolError.malformedResponse
+            }
+            result |= payload << shift
             if byte & 0x80 == 0 { return result }
             shift += 7
         }

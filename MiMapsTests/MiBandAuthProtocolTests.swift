@@ -52,6 +52,27 @@ final class MiBandAuthProtocolTests: XCTestCase {
         )
     }
 
+    func testParsesWatchChallengeExtractedFromBluetoothFrame() throws {
+        let command = data(
+            "0801101A1A37FA01340A10202122232425262728292A2B2C2D2E2F1220"
+                + "17AA8EECAC21D9D71CBA6EA653D126D77ABC2F4D0357F1CCE01D433D40E42235"
+        )
+        let frame = MiBandAuthProtocol.plaintextFrame(command)
+        let bluetoothBuffer = Data([0xAA, 0xBB]) + frame
+        let slicedFrame = bluetoothBuffer.dropFirst(2)
+
+        let payload = try XCTUnwrap(MiBandAuthProtocol.plaintextPayload(from: slicedFrame))
+        XCTAssertEqual(payload.startIndex, 0)
+        XCTAssertNoThrow(try MiBandAuthProtocol.parseWatchChallenge(command: payload))
+    }
+
+    func testRejectsOverflowingVarintInsteadOfTrapping() {
+        let malformed = Data(repeating: 0xFF, count: 10) + Data([0x02])
+        XCTAssertThrowsError(try MiBandAuthProtocol.parseWatchChallenge(command: malformed)) { error in
+            XCTAssertEqual(error as? MiBandAuthProtocolError, .malformedResponse)
+        }
+    }
+
     func testRejectsIncorrectWatchProof() throws {
         let session = try MiBandAuthProtocol.deriveSessionKeys(
             secretKey: MiBandAuthProtocol.keyData(from: key),
