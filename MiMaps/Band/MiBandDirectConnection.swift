@@ -17,6 +17,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     @Published private(set) var sentCommandCount = 0
     @Published private(set) var lastDecryptedCommandPreview: String?
     @Published private(set) var lastIconRequestDescription: String?
+    @Published private(set) var iconUploadDescription: String = "chưa bắt đầu"
 
     private enum StorageKey {
         static let peripheralIdentifier = "directMiBandPeripheralIdentifier"
@@ -37,6 +38,14 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var queuedCommands: [QueuedCommand] = []
     private var pendingCommand: QueuedCommand?
     private var lastNavigationManeuver: NavigationManeuver?
+    private var lastIconPackageName: String?
+    private var pendingIconBytes: Data?
+    private var dataUploadParts: [Data] = []
+    private var nextDataUploadPartIndex = 0
+    private var auxiliaryFrames: [Data] = []
+    private var nextAuxiliaryFrameIndex = 0
+    private var dataUploadAttemptID: UUID?
+    private var dataUploadPhase: DataUploadPhase = .idle
     private let defaults: UserDefaults
     private let now: () -> Date
     private let credentialStore: MiBandCredentialStoring
@@ -56,6 +65,19 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private enum ProtocolCharacteristic {
         static let commandRead = "FE95/0051"
         static let commandWrite = "FE95/0052"
+        static let dataUpload = "FE95/0055"
+    }
+
+    private enum DataUploadPhase: String {
+        case idle
+        case enablingNotifications
+        case waitingRequestAcknowledgement
+        case writingSingleFrame
+        case waitingSingleAcknowledgement
+        case writingChunkStart
+        case waitingChunkStartAcknowledgement
+        case writingChunks
+        case waitingChunkEndAcknowledgement
     }
 
     private enum AuthenticationNotificationStage: String, Equatable {
@@ -251,7 +273,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             id: nextNotificationIdentifier,
             title: title,
             body: body,
-            date: now()
+            date: now(),
+            packageName: MiBandManeuverIconRenderer.packageName(for: maneuver)
         )
         nextNotificationIdentifier &+= 1
         if nextNotificationIdentifier == 0 { nextNotificationIdentifier = 1 }
@@ -308,6 +331,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             "Decrypted session packets: \(decryptedPacketCount)",
             "Last decrypted command: \(lastDecryptedCommandPreview ?? "—")",
             "Last icon request: \(lastIconRequestDescription ?? "—")",
+            "Icon upload: \(iconUploadDescription)",
             "Encrypted commands sent: \(sentCommandCount)",
             "Captured packets: \(capturedPackets.count)",
             ""
@@ -411,6 +435,10 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             service: service,
             characteristic: characteristic.uuid
         )
+        if characteristicKey == ProtocolCharacteristic.dataUpload {
+            handleDataUploadChannelPacket(data)
+            return
+        }
         guard characteristicKey == ProtocolCharacteristic.commandRead
                 || characteristicKey == ProtocolCharacteristic.commandWrite else { return }
 
@@ -513,6 +541,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
 
             if let package = try MiBandNotificationIconProtocol.packageQuery(from: command) {
+                lastIconPackageName = package
                 lastIconRequestDescription = "query package=\(package)"
                 appendEvent("Band yêu cầu icon cho package \(package); gửi phản hồi an toàn")
                 enqueueCommand(
@@ -520,9 +549,15 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                     label: "phản hồi icon \(package)"
                 )
             } else if let request = try MiBandNotificationIconProtocol.iconRequest(from: command) {
-                let maneuver = lastNavigationManeuver.map { String(describing: $0) } ?? "unknown"
+                let requestedManeuver = lastIconPackageName.flatMap {
+                    MiBandManeuverIconRenderer.maneuver(forPackageName: $0)
+                } ?? lastNavigationManeuver
+                let maneuver = requestedManeuver.map { String(describing: $0) } ?? "unknown"
                 lastIconRequestDescription = "status=\(request.status), format=\(request.pixelFormat), size=\(request.size), maneuver=\(maneuver)"
                 appendEvent("Band yêu cầu dữ liệu icon: \(lastIconRequestDescription ?? "—")")
+                try beginIconUpload(request: request, maneuver: requestedManeuver)
+            } else if let acknowledgement = try MiBandDataUploadProtocol.acknowledgement(from: command) {
+                try handleDataUploadAcknowledgement(acknowledgement)
             }
         } catch {
             directNotificationState = .failed(error.localizedDescription)
@@ -611,6 +646,224 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         }
     }
 
+    private func beginIconUpload(
+        request: MiBandNotificationIconRequest,
+        maneuver: NavigationManeuver?
+    ) throws {
+        guard request.status == 0 else {
+            iconUploadDescription = "Band không yêu cầu upload (status=\(request.status))"
+            appendEvent(iconUploadDescription)
+            return
+        }
+        guard dataUploadPhase == .idle else {
+            appendEvent("Bỏ qua yêu cầu icon mới vì một upload khác đang chạy")
+            return
+        }
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload] else {
+            throw MiBandDataUploadProtocolError.malformedProtobuf
+        }
+
+        pendingIconBytes = try MiBandManeuverIconRenderer.pixelData(
+            maneuver: maneuver,
+            size: Int(request.size),
+            pixelFormat: Int(request.pixelFormat)
+        )
+        dataUploadAttemptID = UUID()
+        iconUploadDescription = "chuẩn bị \(pendingIconBytes?.count ?? 0) byte"
+
+        if characteristic.isNotifying {
+            requestPendingIconUpload()
+        } else {
+            dataUploadPhase = .enablingNotifications
+            appendEvent("Bật notify FE95/0055 để truyền pixel icon")
+            peripheral.setNotifyValue(true, for: characteristic)
+            scheduleDataUploadTimeout()
+        }
+    }
+
+    private func requestPendingIconUpload() {
+        guard let bytes = pendingIconBytes else { return }
+        dataUploadPhase = .waitingRequestAcknowledgement
+        iconUploadDescription = "đang thương lượng upload \(bytes.count) byte"
+        appendEvent("Yêu cầu Band mở phiên upload icon \(bytes.count) byte")
+        enqueueCommand(
+            MiBandDataUploadProtocol.makeUploadRequest(
+                type: MiBandDataUploadProtocol.notificationIconType,
+                bytes: bytes
+            ),
+            label: "yêu cầu upload icon"
+        )
+        scheduleDataUploadTimeout()
+    }
+
+    private func handleDataUploadAcknowledgement(
+        _ acknowledgement: MiBandDataUploadAcknowledgement
+    ) throws {
+        guard dataUploadPhase == .waitingRequestAcknowledgement,
+              let bytes = pendingIconBytes else { return }
+        dataUploadParts = try MiBandDataUploadProtocol.uploadParts(
+            type: MiBandDataUploadProtocol.notificationIconType,
+            bytes: bytes,
+            chunkSize: acknowledgement.chunkSize
+        )
+        nextDataUploadPartIndex = 0
+        appendEvent(
+            "Band chấp nhận icon; truyền \(dataUploadParts.count) phần, chunk=\(acknowledgement.chunkSize)"
+        )
+        sendNextDataUploadPart()
+    }
+
+    private func sendNextDataUploadPart() {
+        guard nextDataUploadPartIndex < dataUploadParts.count else {
+            let byteCount = pendingIconBytes?.count ?? 0
+            appendEvent("Upload pixel icon hoàn tất: \(byteCount) byte")
+            resetDataUpload(description: "hoàn tất \(byteCount) byte")
+            return
+        }
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload],
+              let sessionKeys = authenticationContext?.sessionKeys else {
+            failDataUpload("Kênh FE95/0055 không còn sẵn sàng.")
+            return
+        }
+
+        do {
+            let encrypted = try MiBandSessionProtocol.encryptAuxiliaryPayload(
+                dataUploadParts[nextDataUploadPartIndex],
+                sessionKeys: sessionKeys
+            )
+            let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write)
+                ? .withResponse
+                : .withoutResponse
+            let maximumLength = peripheral.maximumWriteValueLength(for: writeType)
+            guard maximumLength > 8 else {
+                failDataUpload("MTU của FE95/0055 quá nhỏ.")
+                return
+            }
+
+            if encrypted.count + 6 <= maximumLength {
+                var frame = Data([0, 0, 2, 1, 0, 0])
+                frame.append(encrypted)
+                dataUploadPhase = .writingSingleFrame
+                writeValue(frame, to: characteristic, peripheral: peripheral)
+            } else {
+                let payloadSize = maximumLength - 2
+                auxiliaryFrames = stride(from: 0, to: encrypted.count, by: payloadSize)
+                    .enumerated()
+                    .map { offset, start in
+                        var frame = Data()
+                        frame.appendLittleEndian(UInt16(offset + 1))
+                        frame.append(encrypted[start..<min(start + payloadSize, encrypted.count)])
+                        return frame
+                    }
+                nextAuxiliaryFrameIndex = 0
+                var start = Data([0, 0, 0, 1])
+                start.appendLittleEndian(UInt16(auxiliaryFrames.count))
+                dataUploadPhase = .writingChunkStart
+                writeValue(start, to: characteristic, peripheral: peripheral)
+            }
+            iconUploadDescription = "đang gửi phần \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count)"
+            scheduleDataUploadTimeout()
+        } catch {
+            failDataUpload(error.localizedDescription)
+        }
+    }
+
+    private func sendNextAuxiliaryFrame() {
+        guard nextAuxiliaryFrameIndex < auxiliaryFrames.count,
+              let peripheral = connectedPeripheral,
+              let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload] else {
+            dataUploadPhase = .waitingChunkEndAcknowledgement
+            return
+        }
+        let frame = auxiliaryFrames[nextAuxiliaryFrameIndex]
+        nextAuxiliaryFrameIndex += 1
+        dataUploadPhase = .writingChunks
+        writeValue(frame, to: characteristic, peripheral: peripheral)
+    }
+
+    private func handleDataUploadChannelPacket(_ data: Data) {
+        if data == Data([0, 0, 1, 1]) {
+            guard dataUploadPhase == .waitingChunkStartAcknowledgement
+                    || dataUploadPhase == .writingChunkStart else { return }
+            appendEvent("Band ACK bắt đầu khối icon")
+            sendNextAuxiliaryFrame()
+            return
+        }
+        if data == Data([0, 0, 1, 0]) {
+            guard dataUploadPhase == .waitingChunkEndAcknowledgement
+                    || dataUploadPhase == .writingChunks else { return }
+            completeCurrentDataUploadPart()
+            return
+        }
+        if data.count == 4, data.starts(with: [0, 0, 3]) {
+            guard dataUploadPhase == .waitingSingleAcknowledgement
+                    || dataUploadPhase == .writingSingleFrame else { return }
+            guard data.last == 0 else {
+                failDataUpload("Band từ chối khối icon, ACK=\(data.last ?? 255).")
+                return
+            }
+            completeCurrentDataUploadPart()
+            return
+        }
+        appendEvent(
+            "Phản hồi FE95/0055 chưa nhận dạng: \(MiBandCapturedPacket.preview(data, limit: 40))"
+        )
+    }
+
+    private func completeCurrentDataUploadPart() {
+        appendEvent("Band nhận phần icon \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count)")
+        nextDataUploadPartIndex += 1
+        auxiliaryFrames = []
+        nextAuxiliaryFrameIndex = 0
+        sendNextDataUploadPart()
+    }
+
+    private func handleSuccessfulDataChannelWrite() {
+        switch dataUploadPhase {
+        case .writingSingleFrame:
+            dataUploadPhase = .waitingSingleAcknowledgement
+        case .writingChunkStart:
+            dataUploadPhase = .waitingChunkStartAcknowledgement
+        case .writingChunks:
+            if nextAuxiliaryFrameIndex < auxiliaryFrames.count {
+                sendNextAuxiliaryFrame()
+            } else {
+                dataUploadPhase = .waitingChunkEndAcknowledgement
+            }
+        default:
+            break
+        }
+    }
+
+    private func scheduleDataUploadTimeout() {
+        guard let attemptID = dataUploadAttemptID else { return }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard let self,
+                  self.dataUploadAttemptID == attemptID,
+                  self.dataUploadPhase != .idle else { return }
+            self.failDataUpload("Hết thời gian chờ truyền icon.")
+        }
+    }
+
+    private func failDataUpload(_ message: String) {
+        appendEvent("Upload icon thất bại: \(message)")
+        resetDataUpload(description: "lỗi: \(message)")
+    }
+
+    private func resetDataUpload(description: String) {
+        pendingIconBytes = nil
+        dataUploadParts = []
+        nextDataUploadPartIndex = 0
+        auxiliaryFrames = []
+        nextAuxiliaryFrameIndex = 0
+        dataUploadAttemptID = nil
+        dataUploadPhase = .idle
+        iconUploadDescription = description
+    }
+
     private func resetSecureSession() {
         authenticationContext = nil
         outgoingEncryptionCounter = 1
@@ -622,6 +875,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         lastDecryptedCommandPreview = nil
         lastIconRequestDescription = nil
         lastNavigationManeuver = nil
+        lastIconPackageName = nil
+        resetDataUpload(description: "chưa bắt đầu")
     }
 
     private func writeValue(_ data: Data, to characteristic: CBCharacteristic, peripheral: CBPeripheral) {
@@ -843,15 +1098,26 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
         error: Error?
     ) {
         let service = characteristic.service?.uuid.uuidString ?? "?"
+        let key = characteristic.service.map {
+            Self.characteristicKey(service: $0.uuid, characteristic: characteristic.uuid)
+        }
         if let error {
             appendEvent("Không thể bật notify \(service)/\(characteristic.uuid.uuidString): \(error.localizedDescription)")
+            if key == ProtocolCharacteristic.dataUpload,
+               dataUploadPhase == .enablingNotifications {
+                failDataUpload(error.localizedDescription)
+            }
             return
         }
         appendEvent("Notify \(characteristic.isNotifying ? "ON" : "OFF") \(service)/\(characteristic.uuid.uuidString)")
         guard characteristic.isNotifying,
               let serviceUUID = characteristic.service?.uuid else { return }
-        let key = Self.characteristicKey(service: serviceUUID, characteristic: characteristic.uuid)
-        advanceAuthenticationSubscriptions(notifiedKey: key, peripheral: peripheral)
+        let resolvedKey = Self.characteristicKey(service: serviceUUID, characteristic: characteristic.uuid)
+        advanceAuthenticationSubscriptions(notifiedKey: resolvedKey, peripheral: peripheral)
+        if resolvedKey == ProtocolCharacteristic.dataUpload,
+           dataUploadPhase == .enablingNotifications {
+            requestPendingIconUpload()
+        }
     }
 
     func peripheral(
@@ -865,6 +1131,8 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
             appendEvent("Ghi \(key) thất bại: \(error.localizedDescription)")
             if authenticationState.isInProgress {
                 failAuthentication("Không thể ghi \(key): \(error.localizedDescription)")
+            } else if key == ProtocolCharacteristic.dataUpload {
+                failDataUpload(error.localizedDescription)
             } else if key == ProtocolCharacteristic.commandWrite,
                       let item = pendingCommand {
                 pendingCommand = nil
@@ -872,8 +1140,13 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
                 appendEvent("Gửi trực tiếp \(item.label) thất bại ở tầng GATT")
                 sendNextQueuedCommandIfPossible()
             }
-        } else if authenticationState.isInProgress {
-            appendEvent("Ghi \(key) thành công ở tầng GATT")
+        } else {
+            if authenticationState.isInProgress {
+                appendEvent("Ghi \(key) thành công ở tầng GATT")
+            }
+            if key == ProtocolCharacteristic.dataUpload {
+                handleSuccessfulDataChannelWrite()
+            }
         }
     }
 
@@ -902,5 +1175,12 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
             }
         }
         handleProtocolPacket(data, characteristic: characteristic, peripheral: peripheral)
+    }
+}
+
+private extension Data {
+    mutating func appendLittleEndian<T: FixedWidthInteger>(_ value: T) {
+        var littleEndianValue = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndianValue) { append(contentsOf: $0) }
     }
 }

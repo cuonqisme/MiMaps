@@ -79,6 +79,20 @@ enum MiBandSessionProtocol {
         return frame
     }
 
+    /// Encrypts a payload for Xiaomi's auxiliary FE95 channels. Those channels
+    /// intentionally use nonce counter zero and apply their own GATT framing.
+    static func encryptAuxiliaryPayload(
+        _ payload: Data,
+        sessionKeys: MiBandSessionKeys
+    ) throws -> Data {
+        try encryptCCM(
+            payload,
+            key: sessionKeys.encryptionKey,
+            noncePrefix: sessionKeys.encryptionNonce,
+            counter: 0
+        )
+    }
+
     static func commandEnvelope(from command: Data) -> MiBandCommandEnvelope {
         var offset = 0
         var type: UInt64?

@@ -190,6 +190,10 @@ struct BandConnectionView: View {
                                 .textSelection(.enabled)
                         }
                     }
+                    LabeledContent(
+                        "Upload icon mũi tên",
+                        value: connection.iconUploadDescription
+                    )
                     Text("Lệnh được mã hóa và gửi thẳng từ MiMaps qua Bluetooth; Mi Fitness không tham gia. Hãy kiểm tra cả màn hình Band và trạng thái ACK sau khi bấm thử.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -208,7 +212,7 @@ struct BandConnectionView: View {
                         }
                     }
                     LabeledContent("Gói đã nhận", value: "\(connection.capturedPackets.count)")
-                    Text("Chế độ này lưu bản xem trước gói FE95/FDAB để chẩn đoán. MiMaps hiện có thể ACK, giải mã phiên và gửi thử thông báo trực tiếp; chưa cài ứng dụng hay firmware lên vòng.")
+                    Text("Chế độ này lưu bản xem trước gói FE95/FDAB để chẩn đoán. MiMaps có thể ACK, giải mã phiên, gửi thông báo và upload pixel icon qua FE95/0055. Chế độ ảnh điều hướng toàn màn hình đang được triển khai riêng cho Band 8.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -218,7 +222,7 @@ struct BandConnectionView: View {
                 ShareLink(item: connection.diagnosticsReport()) {
                     Label("Chia sẻ báo cáo Band Lab", systemImage: "square.and.arrow.up")
                 }
-                Text("Band Lab lưu khóa ghép đôi trong Keychain, xác thực và gửi lệnh thông báo trực tiếp tới Band 8. Việc cài companion riêng vẫn được khóa cho tới khi kênh gửi nhận mã hóa vượt qua kiểm thử thực tế.")
+                Text("Band Lab lưu khóa ghép đôi trong Keychain, xác thực, gửi lệnh và icon trực tiếp tới Band 8. MiMaps không cần Mi Fitness trong lúc vận hành.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
