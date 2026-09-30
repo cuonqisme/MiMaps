@@ -70,7 +70,7 @@ struct SettingsView: View {
                 Button("Cho phép thông báo") {
                     Task { await requestNotificationPermission() }
                 }
-                Text("Band Lab kết nối trực tiếp bằng Bluetooth và không sử dụng Mi Fitness. Trong giai đoạn nhận diện giao thức, thông báo điều hướng cũ vẫn chỉ xuất hiện trên iPhone.")
+                Text("Band Lab kết nối Bluetooth trực tiếp, lưu khóa ghép đôi trong Keychain và thu dữ liệu giao thức. Thông báo điều hướng vẫn chỉ xuất hiện trên iPhone cho đến khi bước xác thực hoàn tất.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -126,7 +126,7 @@ struct SettingsView: View {
                 NavigationLink("Pháp lý và quyền riêng tư") {
                     LegalView()
                 }
-                Text("MiMaps đang triển khai companion Bluetooth trực tiếp cho Xiaomi Smart Band 8. Không cần kết nối Mi Fitness trong chế độ Band Lab.")
+                Text("MiMaps đang triển khai companion Bluetooth trực tiếp cho Xiaomi Smart Band 8. Mi Fitness chỉ cần tạm thời để lấy khóa ghép đôi hiện có; MiMaps không dùng Mi Fitness khi vận hành.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

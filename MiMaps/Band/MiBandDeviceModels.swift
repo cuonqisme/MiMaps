@@ -67,3 +67,32 @@ struct MiBandGATTCharacteristic: Equatable, Sendable {
     let properties: [String]
 }
 
+struct MiBandCapturedPacket: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let timestamp: Date
+    let serviceUUID: String
+    let characteristicUUID: String
+    let byteCount: Int
+    let hexPreview: String
+
+    init(
+        id: UUID = UUID(),
+        timestamp: Date,
+        serviceUUID: String,
+        characteristicUUID: String,
+        data: Data
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.serviceUUID = serviceUUID
+        self.characteristicUUID = characteristicUUID
+        byteCount = data.count
+        hexPreview = Self.preview(data)
+    }
+
+    static func preview(_ data: Data, limit: Int = 64) -> String {
+        let visible = data.prefix(max(0, limit))
+        let value = visible.map { String(format: "%02X", $0) }.joined()
+        return data.count > visible.count ? value + "…" : value
+    }
+}

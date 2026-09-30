@@ -7,6 +7,9 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     @Published private(set) var discoveredDevices: [MiBandDevice] = []
     @Published private(set) var characteristics: [MiBandGATTCharacteristic] = []
     @Published private(set) var eventLog: [String] = []
+    @Published private(set) var capturedPackets: [MiBandCapturedPacket] = []
+    @Published private(set) var isCapturingPackets = false
+    @Published private(set) var savedKeyFingerprint: String?
 
     private enum StorageKey {
         static let peripheralIdentifier = "directMiBandPeripheralIdentifier"
@@ -16,13 +19,21 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var connectedPeripheral: CBPeripheral?
     private var pendingServiceUUIDs: Set<CBUUID> = []
+    private var characteristicHandles: [String: CBCharacteristic] = [:]
     private let defaults: UserDefaults
     private let now: () -> Date
+    private let credentialStore: MiBandCredentialStoring
 
-    init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init) {
+    init(
+        defaults: UserDefaults = .standard,
+        now: @escaping () -> Date = Date.init,
+        credentialStore: MiBandCredentialStoring = MiBandCredentialStore()
+    ) {
         self.defaults = defaults
         self.now = now
+        self.credentialStore = credentialStore
         super.init()
+        refreshSavedKeyState()
         central = CBCentralManager(
             delegate: self,
             queue: .main,
@@ -65,6 +76,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
 
         central.stopScan()
         characteristics = []
+        characteristicHandles = [:]
         pendingServiceUUIDs = []
         state = .connecting(device.name)
         appendEvent("Yêu cầu kết nối \(device.name) [\(device.id.uuidString)]")
@@ -80,11 +92,53 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         central.cancelPeripheralConnection(connectedPeripheral)
     }
 
+    func saveAuthenticationKey(_ value: String) throws {
+        try credentialStore.save(authenticationKey: value)
+        refreshSavedKeyState()
+        appendEvent("Đã lưu khóa xác thực an toàn trong Keychain")
+    }
+
+    func deleteAuthenticationKey() throws {
+        try credentialStore.deleteAuthenticationKey()
+        refreshSavedKeyState()
+        appendEvent("Đã xóa khóa xác thực khỏi Keychain")
+    }
+
+    func startPacketCapture() {
+        guard let peripheral = connectedPeripheral, state.isReady else {
+            appendEvent("Không thể thu dữ liệu: thiết bị chưa sẵn sàng")
+            return
+        }
+
+        capturedPackets = []
+        isCapturingPackets = true
+        let candidates = characteristicHandles.values.filter(Self.isProtocolNotifyCandidate)
+        for characteristic in candidates {
+            peripheral.setNotifyValue(true, for: characteristic)
+        }
+        appendEvent("Bắt đầu thu dữ liệu thụ động trên \(candidates.count) characteristic")
+    }
+
+    func stopPacketCapture() {
+        guard let peripheral = connectedPeripheral else {
+            isCapturingPackets = false
+            return
+        }
+        for characteristic in characteristicHandles.values where characteristic.isNotifying {
+            peripheral.setNotifyValue(false, for: characteristic)
+        }
+        isCapturingPackets = false
+        appendEvent("Dừng thu dữ liệu thụ động")
+    }
+
     func forgetDevice() {
         disconnect()
         defaults.removeObject(forKey: StorageKey.peripheralIdentifier)
         connectedPeripheral = nil
         characteristics = []
+        characteristicHandles = [:]
+        capturedPackets = []
+        isCapturingPackets = false
         state = .idle
         appendEvent("Đã quên thiết bị")
     }
@@ -118,13 +172,21 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             "Device: \(device?.name ?? "—")",
             "Identifier: \(device?.identifier.uuidString ?? "—")",
             "GATT characteristics: \(characteristics.count)",
+            "Authentication key: \(savedKeyFingerprint == nil ? "not configured" : "configured")",
+            "Captured packets: \(capturedPackets.count)",
             ""
         ]
 
         let gatt = characteristics.map { item in
             "\(item.serviceUUID) / \(item.characteristicUUID) [\(item.properties.joined(separator: ", "))]"
         }
-        let events = ["", "Events:"] + eventLog
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        let packets = capturedPackets.map {
+            "[\(formatter.string(from: $0.timestamp))] \($0.serviceUUID) / \($0.characteristicUUID) len=\($0.byteCount) \($0.hexPreview)"
+        }
+        let events = ["", "Packets:"] + packets + ["", "Events:"] + eventLog
         return (header + gatt + events).joined(separator: "\n")
     }
 
@@ -147,6 +209,22 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         state = .ready(name)
         defaults.set(peripheral.identifier.uuidString, forKey: StorageKey.peripheralIdentifier)
         appendEvent("Khám phá GATT hoàn tất: \(characteristics.count) characteristic")
+    }
+
+    private func refreshSavedKeyState() {
+        savedKeyFingerprint = credentialStore.loadAuthenticationKey().map(MiBandAuthenticationKey.fingerprint)
+    }
+
+    private static func characteristicKey(service: CBUUID, characteristic: CBUUID) -> String {
+        "\(service.uuidString.uppercased())/\(characteristic.uuidString.uppercased())"
+    }
+
+    private static func isProtocolNotifyCandidate(_ characteristic: CBCharacteristic) -> Bool {
+        guard characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate),
+              let service = characteristic.service?.uuid.uuidString.uppercased() else {
+            return false
+        }
+        return service == "FE95" || service == "FDAB"
     }
 
     private static func bluetoothDescription(_ state: CBManagerState) -> String {
@@ -242,6 +320,8 @@ extension MiBandDirectConnection: @preconcurrency CBCentralManagerDelegate {
     ) {
         connectedPeripheral = nil
         pendingServiceUUIDs = []
+        characteristicHandles = [:]
+        isCapturingPackets = false
         state = error.map { .failed($0.localizedDescription) } ?? .disconnected
         appendEvent("Đã ngắt kết nối\(error.map { ": \($0.localizedDescription)" } ?? "")")
     }
@@ -283,6 +363,9 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
         }
 
         for characteristic in service.characteristics ?? [] {
+            characteristicHandles[
+                Self.characteristicKey(service: service.uuid, characteristic: characteristic.uuid)
+            ] = characteristic
             characteristics.append(
                 MiBandGATTCharacteristic(
                     serviceUUID: service.uuid.uuidString,
@@ -292,5 +375,43 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
             )
         }
     }
-}
 
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateNotificationStateFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
+        let service = characteristic.service?.uuid.uuidString ?? "?"
+        if let error {
+            appendEvent("Không thể bật notify \(service)/\(characteristic.uuid.uuidString): \(error.localizedDescription)")
+            return
+        }
+        appendEvent("Notify \(characteristic.isNotifying ? "ON" : "OFF") \(service)/\(characteristic.uuid.uuidString)")
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateValueFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
+        guard isCapturingPackets else { return }
+        let service = characteristic.service?.uuid.uuidString ?? "?"
+        if let error {
+            appendEvent("Lỗi nhận dữ liệu \(service)/\(characteristic.uuid.uuidString): \(error.localizedDescription)")
+            return
+        }
+        guard let data = characteristic.value else { return }
+        capturedPackets.append(
+            MiBandCapturedPacket(
+                timestamp: now(),
+                serviceUUID: service,
+                characteristicUUID: characteristic.uuid.uuidString,
+                data: data
+            )
+        )
+        if capturedPackets.count > 250 {
+            capturedPackets.removeFirst(capturedPackets.count - 250)
+        }
+    }
+}
