@@ -23,7 +23,12 @@ final class MiBandSessionProtocolTests: XCTestCase {
             outgoing,
             data("00000201010003CB8137FDDD5B59E67A")
         )
-        let simulatedIncoming = Data(outgoing.prefix(4)) + Data(outgoing.dropFirst(6))
+        // Frames sent by the phone carry a two-byte transmit counter after the
+        // header. Frames received from the band do not: they are encrypted with
+        // the independent receive nonce at counter zero. Do not derive an
+        // incoming fixture by stripping the counter from an outgoing frame,
+        // because its CCM authentication tag was calculated with counter one.
+        let simulatedIncoming = data("000002017650086379839F22C406")
         XCTAssertEqual(
             try MiBandSessionProtocol.decryptIncomingSingleFrame(
                 simulatedIncoming,
