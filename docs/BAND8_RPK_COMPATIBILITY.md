@@ -13,9 +13,11 @@ this state as `Band đã ACK gói` and reports icon query/upload separately.
 
 For the standard Band 8, MiMaps uses the same class of mechanism documented by
 Notify as **picture mode**: a normal Band notification plus a dynamically
-uploaded notification icon. The package identifier must remain `com.mimaps`;
-physical testing showed that direction-specific aliases were ACKed and then
-silently ignored by the Band notification service.
+uploaded notification icon. MiMaps uses short, revisioned keys under the
+`com.mimaps` namespace so a stale or interrupted icon-cache entry cannot block
+the firmware from requesting new pixels. The required order is notification,
+Band package query, phone package reply, Band icon request, and type-`50`
+pixel upload; an unsolicited upload request is not accepted by this firmware.
 
 ## Evidence from the paired device and Mi Fitness export
 

@@ -72,15 +72,12 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         let id: UUID
         let label: String
         let command: Data
+        let maneuver: NavigationManeuver
+        let package: String
     }
 
     private enum PictureModeFallback {
-        // The physical Band 8 used for MiMaps testing previously requested
-        // exactly format 3 at 28 px. Use it only when firmware ACKs the
-        // package reply but omits the next icon-request message.
-        static let pixelFormat: UInt64 = 3
-        static let iconSize: UInt64 = 28
-        static let bootstrapLabel = "khởi tạo picture mode"
+        static let bootstrapLabel = "mở picture mode"
         // Reuse one notification slot so live distance updates replace the
         // preceding navigation card instead of filling the Band history.
         static let navigationNotificationID: UInt32 = 0x4D69_4D61
@@ -319,7 +316,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             beginPictureModeDelivery(
                 command: command,
                 label: label,
-                package: MiBandManeuverIconRenderer.packageName(for: maneuver)
+                package: MiBandManeuverIconRenderer.packageName(for: maneuver),
+                maneuver: maneuver
             )
         } else {
             enqueueCommand(command, label: label)
@@ -586,17 +584,27 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
 
             if let package = try MiBandNotificationIconProtocol.packageQuery(from: command) {
+                guard package.hasPrefix("com.mimaps") else {
+                    appendEvent("Bỏ qua yêu cầu icon không thuộc MiMaps: \(package)")
+                    return
+                }
                 lastIconPackageName = package
                 lastIconRequestDescription = "query package=\(package)"
-                appendEvent("Band yêu cầu icon cho package \(package); gửi phản hồi an toàn")
+                pictureModeDescription = "Band đã hỏi package; trả lời icon"
+                appendEvent("Band hỏi icon cho package \(package); gửi phản hồi theo giao thức")
                 enqueueCommand(
                     MiBandNotificationIconProtocol.makePackageReply(package: package),
                     label: "phản hồi icon \(package)"
                 )
             } else if let request = try MiBandNotificationIconProtocol.iconRequest(from: command) {
-                let requestedManeuver = lastIconPackageName.flatMap {
-                    MiBandManeuverIconRenderer.maneuver(forPackageName: $0)
-                } ?? lastNavigationManeuver
+                let requestedManeuver: NavigationManeuver?
+                if lastIconPackageName == pendingPictureNotification?.package {
+                    requestedManeuver = pendingPictureNotification?.maneuver
+                } else {
+                    requestedManeuver = lastIconPackageName.flatMap {
+                        MiBandManeuverIconRenderer.maneuver(forPackageName: $0)
+                    } ?? lastNavigationManeuver
+                }
                 let maneuver = requestedManeuver.map { String(describing: $0) } ?? "unknown"
                 lastIconRequestDescription = "status=\(request.status), format=\(request.pixelFormat), size=\(request.size), maneuver=\(maneuver)"
                 pictureModeDescription = "Band đã yêu cầu icon; đang upload"
@@ -611,79 +619,72 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         }
     }
 
-    /// Band 8 normally asks the phone for an application icon only when its
-    /// cache misses. A cached (or partially cached) package can therefore ACK
-    /// a notification without ever opening the icon upload channel. Proactively
-    /// replaying the package reply asks the firmware to refresh that icon. The
-    /// actual notification is held until the pixel upload completes so it
-    /// cannot be rendered with the previous maneuver.
+    /// Band 8 asks for an application icon only after receiving a notification
+    /// whose package is not cached. Send that notification once as a primer,
+    /// then resend the latest content after the requested pixel upload.
     private func beginPictureModeDelivery(
         command: Data,
         label: String,
-        package: String
+        package: String,
+        maneuver: NavigationManeuver
     ) {
-        if pendingPictureNotification != nil {
-            appendEvent("Thay chỉ dẫn picture mode đang chờ bằng chỉ dẫn mới nhất")
-        }
-
-        let attemptID = UUID()
+        let attemptID = pendingPictureNotification?.id ?? UUID()
+        let wasAlreadyRunning = pendingPictureNotification != nil
         pendingPictureNotification = PendingPictureNotification(
             id: attemptID,
             label: label,
-            command: command
+            command: command,
+            maneuver: maneuver,
+            package: package
         )
+        if wasAlreadyRunning {
+            appendEvent("Đã gộp cập nhật picture mode; giữ lại chỉ dẫn mới nhất")
+            return
+        }
+        startPendingPictureModeRequest()
+    }
+
+    private func startPendingPictureModeRequest() {
+        guard let pending = pendingPictureNotification else { return }
+        let attemptID = pending.id
         pictureModeAttemptID = attemptID
-        lastIconPackageName = package
-        pictureModeDescription = "đang yêu cầu làm mới icon"
-        iconUploadDescription = "chờ Band yêu cầu dữ liệu icon"
-        appendEvent("Picture mode: chủ động yêu cầu Band làm mới icon cho \(package)")
+        lastIconPackageName = nil
+        pictureModeDescription = "đang gửi notification mồi"
+        iconUploadDescription = "chờ Band hỏi package \(pending.package)"
+        appendEvent("Picture mode: gửi notification mồi để Band hỏi icon \(pending.package)")
+        // Xiaomi's real protocol starts with a notification for an uncached
+        // package. Only after receiving subtype 16 from the Band may the phone
+        // reply with subtype 15 and open a type-50 data upload.
         enqueueCommand(
-            MiBandNotificationIconProtocol.makePackageReply(package: package),
+            pending.command,
             label: PictureModeFallback.bootstrapLabel
         )
         schedulePictureModeRequestTimeout(for: attemptID)
     }
 
-    private func scheduleForcedPictureIconUpload(for attemptID: UUID) {
-        Task { @MainActor [weak self] in
-            // Prefer the request generated by firmware when it is available.
-            try? await Task.sleep(for: .milliseconds(500))
-            guard let self,
-                  self.pictureModeAttemptID == attemptID,
-                  self.pendingPictureNotification?.id == attemptID,
-                  self.dataUploadPhase == .idle else { return }
-
-            let request = MiBandNotificationIconRequest(
-                status: 0,
-                pixelFormat: PictureModeFallback.pixelFormat,
-                size: PictureModeFallback.iconSize
-            )
-            self.lastIconRequestDescription = "forced format=3, size=28, maneuver=\(String(describing: self.lastNavigationManeuver))"
-            self.pictureModeDescription = "Band không hỏi icon; thử upload chủ động"
-            self.appendEvent("Picture mode: thử upload icon chủ động 28x28 format=3")
-            do {
-                try self.beginIconUpload(
-                    request: request,
-                    maneuver: self.lastNavigationManeuver
-                )
-            } catch {
-                self.pictureModeDescription = "không thể mở upload; gửi text dự phòng"
-                self.appendEvent("Picture mode: không thể upload chủ động: \(error.localizedDescription)")
-                self.deliverPendingPictureNotification()
-            }
-        }
+    private func restartPendingPictureModeRequest() {
+        guard let pending = pendingPictureNotification else { return }
+        pendingPictureNotification = PendingPictureNotification(
+            id: UUID(),
+            label: pending.label,
+            command: pending.command,
+            maneuver: pending.maneuver,
+            package: pending.package
+        )
+        startPendingPictureModeRequest()
     }
 
     private func schedulePictureModeRequestTimeout(for attemptID: UUID) {
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(5))
             guard let self,
                   self.pictureModeAttemptID == attemptID,
                   self.pendingPictureNotification?.id == attemptID,
                   self.dataUploadPhase == .idle else { return }
-            self.pictureModeDescription = "Band không yêu cầu icon; gửi text dự phòng"
-            self.iconUploadDescription = "không có icon request sau 3 giây"
-            self.appendEvent("Picture mode: Band không yêu cầu icon; gửi thông báo dự phòng")
+            self.uploadedIconManeuver = self.pendingPictureNotification?.maneuver
+            self.pictureModeDescription = "Band dùng icon đã cache; gửi chỉ dẫn"
+            self.iconUploadDescription = "Band không hỏi package sau 5 giây"
+            self.appendEvent("Picture mode: Band không hỏi package; coi icon đã có trong cache")
             self.deliverPendingPictureNotification()
         }
     }
@@ -757,10 +758,6 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         if result == 0 {
             directNotificationState = .delivered(item.label)
             appendEvent("Band ACK lệnh trực tiếp: \(item.label)")
-            if item.label == PictureModeFallback.bootstrapLabel,
-               let attemptID = pictureModeAttemptID {
-                scheduleForcedPictureIconUpload(for: attemptID)
-            }
         } else {
             directNotificationState = .failed("Band trả ACK mã \(result) cho \(item.label).")
             appendEvent("Band từ chối lệnh \(item.label), ACK=\(result)")
@@ -787,6 +784,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         guard request.status == 0 else {
             iconUploadDescription = "Band không yêu cầu upload (status=\(request.status))"
             pictureModeDescription = "Band dùng icon đã lưu; gửi thông báo"
+            uploadedIconManeuver = maneuver
             appendEvent(iconUploadDescription)
             deliverPendingPictureNotification()
             return
@@ -855,11 +853,18 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private func sendNextDataUploadPart() {
         guard nextDataUploadPartIndex < dataUploadParts.count else {
             let byteCount = pendingIconBytes?.count ?? 0
-            uploadedIconManeuver = dataUploadManeuver
+            let completedManeuver = dataUploadManeuver
+            uploadedIconManeuver = completedManeuver
             appendEvent("Upload pixel icon hoàn tất: \(byteCount) byte")
             resetDataUpload(description: "hoàn tất \(byteCount) byte")
             pictureModeDescription = "icon đã sẵn sàng; gửi thông báo"
-            deliverPendingPictureNotification()
+            if pendingPictureNotification?.maneuver == completedManeuver {
+                deliverPendingPictureNotification()
+            } else {
+                pictureModeAttemptID = nil
+                appendEvent("Hướng rẽ đã đổi trong lúc upload; mở picture mode cho chỉ dẫn mới nhất")
+                restartPendingPictureModeRequest()
+            }
             return
         }
         guard let peripheral = connectedPeripheral,
@@ -1062,7 +1067,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private func scheduleDataUploadTimeout() {
         guard let attemptID = dataUploadAttemptID else { return }
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(30))
+            try? await Task.sleep(for: .seconds(12))
             guard let self,
                   self.dataUploadAttemptID == attemptID,
                   self.dataUploadPhase != .idle else { return }

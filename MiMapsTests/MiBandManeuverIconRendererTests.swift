@@ -3,14 +3,16 @@ import XCTest
 
 @MainActor
 final class MiBandManeuverIconRendererTests: XCTestCase {
-    func testUsesFirmwareAcceptedStablePackage() {
+    func testUsesShortRevisionedPackageToAvoidStaleBandIconCache() {
         let package = MiBandManeuverIconRenderer.packageName(for: .right)
-        XCTAssertEqual(package, "com.mimaps")
-        XCTAssertNil(MiBandManeuverIconRenderer.maneuver(forPackageName: package))
+        XCTAssertEqual(package, "com.mimaps.p3.r")
+        XCTAssertLessThanOrEqual(package.utf8.count, 24)
+        XCTAssertEqual(MiBandManeuverIconRenderer.maneuver(forPackageName: package), .right)
         XCTAssertEqual(
             MiBandManeuverIconRenderer.maneuver(forPackageName: "com.mimaps.nav.right"),
             .right
         )
+        XCTAssertEqual(MiBandManeuverIconRenderer.packageName(for: nil), "com.mimaps")
     }
 
     func testRendersBandRequestedArgb8888Pixels() throws {

@@ -20,23 +20,62 @@ enum MiBandManeuverIconRendererError: LocalizedError, Equatable {
 @MainActor
 enum MiBandManeuverIconRenderer {
     static func packageName(for maneuver: NavigationManeuver?) -> String {
-        // Band 8 standard only requested an icon for this exact application
-        // identifier during physical-device testing. Direction-specific package
-        // aliases were ACKed at the transport layer but silently discarded by
-        // the notification service, so keep the package stable and associate
-        // the requested icon with `lastNavigationManeuver` instead.
-        "com.mimaps"
+        guard let maneuver else { return "com.mimaps" }
+        // The Band caches notification icons by package name. Keep the alias
+        // short enough for Xiaomi's package field and revision it whenever the
+        // on-wire icon format changes, so a stale/partial com.mimaps upload
+        // cannot suppress the package-query handshake forever.
+        return "com.mimaps.p3.\(cacheToken(for: maneuver))"
     }
 
     static func maneuver(forPackageName packageName: String) -> NavigationManeuver? {
-        // Retain parsing for diagnostics captured by the short-lived builds
-        // that used com.mimaps.nav.<maneuver>. Current builds deliberately use
-        // the stable com.mimaps package and fall back to lastNavigationManeuver.
-        guard packageName.hasPrefix("com.mimaps.nav."),
-              let token = packageName.split(separator: ".").last.map(String.init) else {
+        guard let token = packageName.split(separator: ".").last.map(String.init) else {
             return nil
         }
+        if packageName.hasPrefix("com.mimaps.p3.") {
+            return maneuver(forCacheToken: token)
+        }
+        guard packageName.hasPrefix("com.mimaps.nav.") else { return nil }
         return maneuver(for: token)
+    }
+
+    private static func cacheToken(for maneuver: NavigationManeuver) -> String {
+        switch maneuver {
+        case .straight: "s"
+        case .slightLeft: "sl"
+        case .left: "l"
+        case .sharpLeft: "hl"
+        case .slightRight: "sr"
+        case .right: "r"
+        case .sharpRight: "hr"
+        case .uTurnLeft: "ul"
+        case .uTurnRight: "ur"
+        case .mergeLeft, .forkLeft, .rampLeft: "ml"
+        case .mergeRight, .forkRight, .rampRight: "mr"
+        case .roundabout, .roundaboutExit: "rb"
+        case .destination: "d"
+        case .unknown: "n"
+        }
+    }
+
+    private static func maneuver(forCacheToken token: String) -> NavigationManeuver? {
+        switch token {
+        case "s": .straight
+        case "sl": .slightLeft
+        case "l": .left
+        case "hl": .sharpLeft
+        case "sr": .slightRight
+        case "r": .right
+        case "hr": .sharpRight
+        case "ul": .uTurnLeft
+        case "ur": .uTurnRight
+        case "ml": .mergeLeft
+        case "mr": .mergeRight
+        case "rb": .roundabout
+        case "d": .destination
+        case "n": .unknown
+        default: nil
+        }
     }
 
     static func pixelData(
