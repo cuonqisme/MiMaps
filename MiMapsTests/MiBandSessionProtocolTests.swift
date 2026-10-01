@@ -80,6 +80,22 @@ final class MiBandSessionProtocolTests: XCTestCase {
         XCTAssertNotNil(command.range(of: Data("đường".utf8)))
     }
 
+    func testSessionNotificationIdentifiersDoNotReuseTheLegacyNavigationSlot() {
+        let date = Date(timeIntervalSince1970: 1_727_777_777.123)
+        let identifier = MiBandNotificationProtocol.sessionNotificationIdentifier(at: date)
+
+        XCTAssertNotEqual(identifier, 0)
+        XCTAssertNotEqual(identifier, 0x4D69_4D61)
+        XCTAssertEqual(
+            MiBandNotificationProtocol.incrementedNotificationIdentifier(after: identifier),
+            identifier &+ 1
+        )
+        XCTAssertEqual(
+            MiBandNotificationProtocol.incrementedNotificationIdentifier(after: .max),
+            1
+        )
+    }
+
     private func data(_ hex: String) -> Data {
         var output = Data()
         var index = hex.startIndex

@@ -4,6 +4,20 @@ enum MiBandNotificationProtocol {
     static let commandType: UInt64 = 7
     static let sendSubtype: UInt64 = 0
 
+    /// Xiaomi identifies a notification primarily by its numeric ID. Reusing
+    /// the same ID across app launches makes a notification with a new package
+    /// look like an update, so the Band can skip its package/icon query.
+    static func sessionNotificationIdentifier(at date: Date) -> UInt32 {
+        let milliseconds = UInt64(max(0, date.timeIntervalSince1970 * 1_000))
+        let identifier = UInt32(truncatingIfNeeded: milliseconds)
+        return identifier == 0 ? 1 : identifier
+    }
+
+    static func incrementedNotificationIdentifier(after identifier: UInt32) -> UInt32 {
+        let next = identifier &+ 1
+        return next == 0 ? 1 : next
+    }
+
     static func makeNotificationCommand(
         id: UInt32,
         title: String,

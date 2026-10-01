@@ -5,11 +5,15 @@ import XCTest
 final class MiBandManeuverIconRendererTests: XCTestCase {
     func testUsesShortRevisionedPackageToAvoidStaleBandIconCache() {
         let package = MiBandManeuverIconRenderer.packageName(for: .right)
-        XCTAssertEqual(package, "com.mimaps.p3.r")
+        XCTAssertEqual(package, "com.mimaps.p4.r")
         XCTAssertLessThanOrEqual(package.utf8.count, 24)
         XCTAssertEqual(MiBandManeuverIconRenderer.maneuver(forPackageName: package), .right)
         XCTAssertEqual(
             MiBandManeuverIconRenderer.maneuver(forPackageName: "com.mimaps.nav.right"),
+            .right
+        )
+        XCTAssertEqual(
+            MiBandManeuverIconRenderer.maneuver(forPackageName: "com.mimaps.p3.r"),
             .right
         )
         XCTAssertEqual(MiBandManeuverIconRenderer.packageName(for: nil), "com.mimaps")

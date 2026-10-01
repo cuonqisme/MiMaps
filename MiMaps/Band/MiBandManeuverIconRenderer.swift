@@ -25,14 +25,15 @@ enum MiBandManeuverIconRenderer {
         // short enough for Xiaomi's package field and revision it whenever the
         // on-wire icon format changes, so a stale/partial com.mimaps upload
         // cannot suppress the package-query handshake forever.
-        return "com.mimaps.p3.\(cacheToken(for: maneuver))"
+        return "com.mimaps.p4.\(cacheToken(for: maneuver))"
     }
 
     static func maneuver(forPackageName packageName: String) -> NavigationManeuver? {
         guard let token = packageName.split(separator: ".").last.map(String.init) else {
             return nil
         }
-        if packageName.hasPrefix("com.mimaps.p3.") {
+        if packageName.hasPrefix("com.mimaps.p4.")
+            || packageName.hasPrefix("com.mimaps.p3.") {
             return maneuver(forCacheToken: token)
         }
         guard packageName.hasPrefix("com.mimaps.nav.") else { return nil }

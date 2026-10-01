@@ -6,6 +6,8 @@ Application/project rename in this release: MiMaps replaces the former product n
 
 ## 0.1.0 — in development
 
+- Assigned a fresh session notification ID whenever the Band navigation package changes, preventing firmware from treating a new icon package as an update to the legacy fixed notification slot and skipping the package-query handshake.
+- Rotated the navigation icon cache key to `p4` and stopped claiming that an icon is cached when the Band never sends a package query; the primer notification is no longer duplicated on this fallback path.
 - Corrected the Band 8 icon handshake to start with a notification for a short revisioned package key, wait for the Band's package query and icon request, and only then open the type-50 upload; forced uploads without a device request now fail fast instead of waiting repeatedly.
 - Coalesced realtime/test updates while picture mode is negotiating so only the newest instruction is resent after icon upload.
 - Fixed Band 8 icon transfer on iOS by using MTU-sized `writeWithoutResponse` frames on FE95/0055 instead of unsupported ATT long writes, with CoreBluetooth backpressure and Band-requested missing-frame retransmission.

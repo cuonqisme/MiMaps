@@ -35,7 +35,9 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var lastConnectedDeviceName: String?
     private var lastConnectedDeviceIdentifier: UUID?
     private var outgoingEncryptionCounter: UInt16 = 1
-    private var nextNotificationIdentifier: UInt32 = 1
+    private var nextNotificationIdentifier: UInt32
+    private var activeNavigationNotificationIdentifier: UInt32?
+    private var activeNavigationPackage: String?
     private var queuedCommands: [QueuedCommand] = []
     private var pendingCommand: QueuedCommand?
     private var pendingPictureNotification: PendingPictureNotification?
@@ -78,9 +80,6 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
 
     private enum PictureModeFallback {
         static let bootstrapLabel = "mở picture mode"
-        // Reuse one notification slot so live distance updates replace the
-        // preceding navigation card instead of filling the Band history.
-        static let navigationNotificationID: UInt32 = 0x4D69_4D61
     }
 
     private enum ProtocolCharacteristic {
@@ -123,6 +122,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         self.defaults = defaults
         self.now = now
         self.credentialStore = credentialStore
+        self.nextNotificationIdentifier = MiBandNotificationProtocol
+            .sessionNotificationIdentifier(at: now())
         super.init()
         refreshSavedKeyState()
         central = CBCentralManager(
@@ -297,31 +298,47 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             appendEvent("Không thể gửi trực tiếp: phiên bảo mật chưa sẵn sàng")
             return
         }
-        let notificationID = maneuver == nil
-            ? nextNotificationIdentifier
-            : PictureModeFallback.navigationNotificationID
+        let package = MiBandManeuverIconRenderer.packageName(for: maneuver)
+        let notificationID: UInt32
+        if maneuver == nil {
+            notificationID = takeNextNotificationIdentifier()
+        } else if activeNavigationPackage == package,
+                  let activeNavigationNotificationIdentifier {
+            notificationID = activeNavigationNotificationIdentifier
+        } else {
+            notificationID = takeNextNotificationIdentifier()
+            activeNavigationNotificationIdentifier = notificationID
+            activeNavigationPackage = package
+            uploadedIconManeuver = nil
+            appendEvent(
+                "Picture mode: dùng notification ID mới \(notificationID) cho \(package)"
+            )
+        }
         let command = MiBandNotificationProtocol.makeNotificationCommand(
             id: notificationID,
             title: title,
             body: body,
             date: now(),
-            packageName: MiBandManeuverIconRenderer.packageName(for: maneuver)
+            packageName: package
         )
-        if maneuver == nil {
-            nextNotificationIdentifier &+= 1
-            if nextNotificationIdentifier == 0 { nextNotificationIdentifier = 1 }
-        }
         lastNavigationManeuver = maneuver
         if let maneuver, maneuver != uploadedIconManeuver {
             beginPictureModeDelivery(
                 command: command,
                 label: label,
-                package: MiBandManeuverIconRenderer.packageName(for: maneuver),
+                package: package,
                 maneuver: maneuver
             )
         } else {
             enqueueCommand(command, label: label)
         }
+    }
+
+    private func takeNextNotificationIdentifier() -> UInt32 {
+        let identifier = nextNotificationIdentifier
+        nextNotificationIdentifier = MiBandNotificationProtocol
+            .incrementedNotificationIdentifier(after: identifier)
+        return identifier
     }
 
     func forgetDevice() {
@@ -682,10 +699,16 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                   self.pendingPictureNotification?.id == attemptID,
                   self.dataUploadPhase == .idle else { return }
             self.uploadedIconManeuver = self.pendingPictureNotification?.maneuver
-            self.pictureModeDescription = "Band dùng icon đã cache; gửi chỉ dẫn"
-            self.iconUploadDescription = "Band không hỏi package sau 5 giây"
-            self.appendEvent("Picture mode: Band không hỏi package; coi icon đã có trong cache")
-            self.deliverPendingPictureNotification()
+            self.pictureModeDescription = "Band không mở kênh icon; giữ text dự phòng"
+            self.iconUploadDescription = "Không nhận package query sau 5 giây"
+            self.appendEvent(
+                "Picture mode: notification ID mới nhưng Band không hỏi package; "
+                    + "không thể xác nhận icon đã cache"
+            )
+            // The primer already contains the complete instruction. Clear the
+            // negotiation without sending an identical notification twice.
+            self.pendingPictureNotification = nil
+            self.pictureModeAttemptID = nil
         }
     }
 
@@ -1107,6 +1130,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         lastIconRequestDescription = nil
         lastNavigationManeuver = nil
         uploadedIconManeuver = nil
+        activeNavigationNotificationIdentifier = nil
+        activeNavigationPackage = nil
         lastIconPackageName = nil
         pendingPictureNotification = nil
         pictureModeAttemptID = nil
