@@ -27,6 +27,7 @@ enum MiBandDataUploadProtocolError: LocalizedError, Equatable {
     case malformedProtobuf
     case rejected(status: UInt64, resumePosition: UInt64)
     case invalidChunkSize
+    case uploadAlreadyInProgress
 
     var errorDescription: String? {
         switch self {
@@ -36,6 +37,8 @@ enum MiBandDataUploadProtocolError: LocalizedError, Equatable {
             "Mi Band từ chối upload (status=\(status), resume=\(resumePosition))."
         case .invalidChunkSize:
             "Kích thước khối upload do Mi Band trả về không hợp lệ."
+        case .uploadAlreadyInProgress:
+            "Một phiên upload khác đang chạy."
         }
     }
 }

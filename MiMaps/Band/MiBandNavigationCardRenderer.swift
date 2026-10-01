@@ -76,6 +76,43 @@ enum MiBandNavigationCardRenderer {
         render(instruction).pngData()
     }
 
+    static func watchfacePackage(
+        _ instruction: NavigationInstruction,
+        identifier: String
+    ) throws -> MiBandWatchfacePackage {
+        let image = render(instruction)
+        guard let cgImage = image.cgImage else {
+            throw MiBandWatchfaceBuilderError.invalidPixelBuffer
+        }
+        let width = Int(canvasSize.width)
+        let height = Int(canvasSize.height)
+        var pixels = Data(repeating: 0, count: width * height * 4)
+        let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let baseAddress = buffer.baseAddress,
+                  let context = CGContext(
+                      data: baseAddress,
+                      width: width,
+                      height: height,
+                      bitsPerComponent: 8,
+                      bytesPerRow: width * 4,
+                      space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue
+                          | CGImageAlphaInfo.premultipliedFirst.rawValue
+                  ) else { return false }
+            context.translateBy(x: 0, y: CGFloat(height))
+            context.scaleBy(x: 1, y: -1)
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard rendered else {
+            throw MiBandWatchfaceBuilderError.invalidPixelBuffer
+        }
+        return try MiBandWatchfaceBuilder.build(
+            identifier: identifier,
+            bgraPixels: pixels
+        )
+    }
+
     private static func drawManeuver(
         _ maneuver: NavigationManeuver,
         in context: CGContext

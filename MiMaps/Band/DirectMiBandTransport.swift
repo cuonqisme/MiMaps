@@ -9,6 +9,31 @@ protocol MiBandDirectNotificationSending: AnyObject {
         label: String,
         maneuver: NavigationManeuver?
     )
+    func sendNavigationInstruction(
+        _ instruction: NavigationInstruction,
+        title: String,
+        body: String,
+        label: String
+    )
+    func stopFullscreenNavigation()
+}
+
+extension MiBandDirectNotificationSending {
+    func sendNavigationInstruction(
+        _ instruction: NavigationInstruction,
+        title: String,
+        body: String,
+        label: String
+    ) {
+        sendDirectNotification(
+            title: title,
+            body: body,
+            label: label,
+            maneuver: instruction.maneuver
+        )
+    }
+
+    func stopFullscreenNavigation() {}
 }
 
 extension MiBandDirectConnection: MiBandDirectNotificationSending {}
@@ -66,6 +91,7 @@ final class DirectMiBandTransport: BandTransport {
         isStarted = false
         deduplicator.reset()
         resetLiveUpdates()
+        directSender.stopFullscreenNavigation()
     }
 
     func send(_ instruction: NavigationInstruction) async throws {
@@ -81,11 +107,11 @@ final class DirectMiBandTransport: BandTransport {
         let directAvailable = directSender.canSendDirectNotifications
         let signature = directSignature(for: instruction)
         if directAvailable, signature != lastDirectSignature {
-            directSender.sendDirectNotification(
+            directSender.sendNavigationInstruction(
+                instruction,
                 title: content.title,
                 body: content.body,
-                label: "bước \(instruction.stepIdentifier)",
-                maneuver: instruction.maneuver
+                label: "bước \(instruction.stepIdentifier)"
             )
             lastDirectSignature = signature
         }
@@ -125,11 +151,11 @@ final class DirectMiBandTransport: BandTransport {
             includeSpeedLimit: speedLimitEnabled(),
             displayStyle: displayStyle()
         )
-        directSender.sendDirectNotification(
+        directSender.sendNavigationInstruction(
+            instruction,
             title: content.title,
             body: content.body,
-            label: "realtime \(instruction.stepIdentifier)",
-            maneuver: instruction.maneuver
+            label: "realtime \(instruction.stepIdentifier)"
         )
         lastLiveUpdateTimestamp = instruction.timestamp
         lastLiveStepIdentifier = instruction.stepIdentifier

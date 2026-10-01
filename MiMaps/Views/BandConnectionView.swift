@@ -6,6 +6,7 @@ struct BandConnectionView: View {
     @State private var authenticationKey = ""
     @State private var keyError: String?
     @State private var navigationCardPreview: UIImage?
+    @State private var watchfaceRiskAcknowledged = false
 
     init(connection: MiBandDirectConnection) {
         _connection = ObservedObject(wrappedValue: connection)
@@ -221,6 +222,62 @@ struct BandConnectionView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                Section("Điều hướng toàn màn hình thử nghiệm") {
+                    LabeledContent(
+                        "Trạng thái",
+                        value: connection.watchfaceInstallationState.localizedDescription
+                    )
+                    LabeledContent("Firmware", value: connection.firmwareVersion ?? "chưa đọc")
+                    LabeledContent(
+                        "Pin Band",
+                        value: connection.batteryLevel.map { "\($0)%" } ?? "chưa đọc"
+                    )
+                    LabeledContent(
+                        "Mặt sẽ khôi phục",
+                        value: connection.previousWatchfaceIdentifier ?? "chưa xác định"
+                    )
+                    LabeledContent(
+                        "Realtime",
+                        value: connection.fullscreenNavigationEnabled ? "đang bật" : "đang tắt"
+                    )
+                    LabeledContent("Upload type 16", value: connection.watchfaceUploadDescription)
+
+                    Button("Đọc lại firmware, pin và mặt hiện tại") {
+                        connection.refreshWatchfaceState()
+                    }
+                    Button("Tạo và kiểm tra gói thử 192×490") {
+                        let instruction = Self.fullscreenTestInstruction
+                        navigationCardPreview = MiBandNavigationCardRenderer.render(instruction)
+                        connection.prepareFullscreenPackage(instruction)
+                    }
+
+                    Toggle(
+                        "Tôi hiểu đây là tính năng thử nghiệm có rủi ro firmware",
+                        isOn: $watchfaceRiskAcknowledged
+                    )
+                    .tint(.orange)
+
+                    Button("Cài gói đã kiểm tra và bật realtime") {
+                        connection.installPreparedFullscreenWatchface(
+                            riskAcknowledged: watchfaceRiskAcknowledged
+                        )
+                    }
+                    .disabled(!watchfaceRiskAcknowledged)
+
+                    if connection.previousWatchfaceIdentifier != nil {
+                        Button("Khôi phục mặt đồng hồ trước đó") {
+                            connection.restorePreviousWatchface()
+                        }
+                    }
+
+                    Text("MiMaps tự dựng ảnh, nén RGB565/RLE, đóng gói mặt đồng hồ Band 8, upload type 16 rồi kích hoạt. Khi điều hướng dừng, ứng dụng yêu cầu khôi phục mặt đã lưu; MiMaps chỉ xóa các ID do chính MiMaps tạo và không xóa mặt gốc/đang active.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text("Cảnh báo: một số firmware Mi Band 8 mới có thể từ chối mặt tùy chỉnh hoặc khôi phục không ổn định. Chỉ cài khi firmware, pin và ID khôi phục đều đã hiển thị; không tắt Bluetooth hoặc đóng ứng dụng trong lúc upload.")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
             }
 
             if connection.state.isReady {
@@ -255,5 +312,16 @@ struct BandConnectionView: View {
             connection.stopScan()
             connection.stopPacketCapture()
         }
+    }
+
+    private static var fullscreenTestInstruction: NavigationInstruction {
+        NavigationInstruction(
+            maneuver: .roundaboutExit(3),
+            roadName: "Giáp Hải",
+            distanceToManeuverMeters: 513,
+            remainingDistanceMeters: 9_700,
+            remainingTimeSeconds: 1_200,
+            stepIdentifier: "band-fullscreen-test"
+        )
     }
 }

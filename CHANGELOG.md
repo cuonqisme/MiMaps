@@ -6,6 +6,7 @@ Application/project rename in this release: MiMaps replaces the former product n
 
 ## 0.1.0 — in development
 
+- Added an opt-in, guarded Band 8 full-screen navigation pipeline: native 192×490 rendering, RGB565/RLE watchface packaging, type-16 transfer, install/activate commands, active-face capture, restoration, MiMaps-only cleanup, progress diagnostics, update coalescing, and automatic restore when navigation stops. The normal notification path remains the default until physical firmware testing succeeds.
 - Assigned a fresh session notification ID whenever the Band navigation package changes, preventing firmware from treating a new icon package as an update to the legacy fixed notification slot and skipping the package-query handshake.
 - Rotated the navigation icon cache key to `p4` and stopped claiming that an icon is cached when the Band never sends a package query; the primer notification is no longer duplicated on this fallback path.
 - Corrected the Band 8 icon handshake to start with a notification for a short revisioned package key, wait for the Band's package query and icon request, and only then open the type-50 upload; forced uploads without a device request now fail fast instead of waiting repeatedly.

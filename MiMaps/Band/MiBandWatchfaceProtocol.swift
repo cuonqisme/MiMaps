@@ -4,6 +4,7 @@ enum MiBandWatchfacePackageError: LocalizedError, Equatable {
     case tooSmall
     case invalidMagic
     case missingNumericIdentifier
+    case invalidContainer
 
     var errorDescription: String? {
         switch self {
@@ -13,15 +14,23 @@ enum MiBandWatchfacePackageError: LocalizedError, Equatable {
             "Tệp không phải mặt đồng hồ Xiaomi 5A A5."
         case .missingNumericIdentifier:
             "Không tìm thấy ID số hợp lệ trong gói mặt đồng hồ."
+        case .invalidContainer:
+            "Cấu trúc gói mặt đồng hồ không hợp lệ."
         }
     }
 }
 
 enum MiBandWatchfaceProtocolError: LocalizedError, Equatable {
     case malformedProtobuf
+    case installRejected(status: UInt64)
 
     var errorDescription: String? {
-        "Phản hồi cài mặt đồng hồ không hợp lệ."
+        switch self {
+        case .malformedProtobuf:
+            "Phản hồi cài mặt đồng hồ không hợp lệ."
+        case let .installRejected(status):
+            "Band từ chối cài mặt đồng hồ (status=\(status))."
+        }
     }
 }
 
@@ -36,22 +45,44 @@ struct MiBandWatchfacePackage: Equatable, Sendable {
         guard bytes.count >= Self.minimumHeaderLength else {
             throw MiBandWatchfacePackageError.tooSmall
         }
-        guard bytes[bytes.startIndex] == 0x5A,
-              bytes[bytes.startIndex + 1] == 0xA5 else {
+        guard Data(bytes.prefix(4)) == Data([0x5A, 0xA5, 0x34, 0x12]) else {
             throw MiBandWatchfacePackageError.invalidMagic
+        }
+
+        let version = bytes.littleEndianUInt32(at: 16)
+        let faceCount = bytes[28]
+        let previewOffset = Int(bytes.littleEndianUInt32(at: 32))
+        guard version > 0,
+              version <= 4_096,
+              faceCount > 0,
+              faceCount <= 16,
+              previewOffset >= Self.minimumHeaderLength,
+              previewOffset < bytes.count else {
+            throw MiBandWatchfacePackageError.invalidContainer
         }
 
         let identifierBytes = bytes
             .dropFirst(Self.identifierOffset)
+            .prefix(64)
             .prefix { $0 != 0 }
         guard !identifierBytes.isEmpty,
               identifierBytes.allSatisfy({ (0x30...0x39).contains($0) }),
+              identifierBytes.count <= 9,
               let identifier = String(data: Data(identifierBytes), encoding: .ascii) else {
             throw MiBandWatchfacePackageError.missingNumericIdentifier
         }
 
         self.identifier = identifier
         self.bytes = bytes
+    }
+}
+
+private extension Data {
+    func littleEndianUInt32(at offset: Int) -> UInt32 {
+        UInt32(self[offset])
+            | (UInt32(self[offset + 1]) << 8)
+            | (UInt32(self[offset + 2]) << 16)
+            | (UInt32(self[offset + 3]) << 24)
     }
 }
 
@@ -62,7 +93,19 @@ enum MiBandWatchfaceProtocol {
     static let commandType: UInt64 = 4
     static let installSubtype: UInt64 = 4
     static let setSubtype: UInt64 = 1
+    static let deleteSubtype: UInt64 = 2
     static let uploadType: UInt8 = 16
+
+    struct WatchfaceInfo: Equatable, Sendable {
+        let identifier: String
+        let name: String
+        let isActive: Bool
+        let canDelete: Bool
+    }
+
+    static func makeListCommand() -> Data {
+        fieldVarint(1, commandType) + fieldVarint(2, 0)
+    }
 
     static func makeInstallStartCommand(
         identifier: String,
@@ -83,6 +126,13 @@ enum MiBandWatchfaceProtocol {
             + fieldMessage(6, watchface)
     }
 
+    static func makeDeleteCommand(identifier: String) -> Data {
+        let watchface = fieldString(2, identifier)
+        return fieldVarint(1, commandType)
+            + fieldVarint(2, deleteSubtype)
+            + fieldMessage(6, watchface)
+    }
+
     static func installStatus(from command: Data) throws -> UInt64? {
         let root = try fields(command)
         guard root.varint(1) == commandType,
@@ -91,6 +141,52 @@ enum MiBandWatchfaceProtocol {
             throw MiBandWatchfaceProtocolError.malformedProtobuf
         }
         return try fields(watchfaceBytes).varint(5)
+    }
+
+    static func setAcknowledgement(from command: Data) throws -> UInt64? {
+        let root = try fields(command)
+        guard root.varint(1) == commandType,
+              root.varint(2) == setSubtype else { return nil }
+        guard let watchfaceBytes = root.bytes(6) else {
+            throw MiBandWatchfaceProtocolError.malformedProtobuf
+        }
+        return try fields(watchfaceBytes).varint(4)
+    }
+
+    static func deleteAcknowledgement(from command: Data) throws -> UInt64? {
+        let root = try fields(command)
+        guard root.varint(1) == commandType,
+              root.varint(2) == deleteSubtype else { return nil }
+        guard let watchfaceBytes = root.bytes(6) else {
+            throw MiBandWatchfaceProtocolError.malformedProtobuf
+        }
+        return try fields(watchfaceBytes).varint(4)
+    }
+
+    static func watchfaceList(from command: Data) throws -> [WatchfaceInfo]? {
+        let root = try fields(command)
+        guard root.varint(1) == commandType,
+              root.varint(2) == 0 else { return nil }
+        guard let watchfaceBytes = root.bytes(6),
+              let listBytes = try fields(watchfaceBytes).bytes(1) else {
+            throw MiBandWatchfaceProtocolError.malformedProtobuf
+        }
+        let list = try fields(listBytes)
+        return try list.allBytes(1).map { infoBytes in
+            let info = try fields(infoBytes)
+            guard let idData = info.bytes(1),
+                  let identifier = String(data: idData, encoding: .utf8),
+                  !identifier.isEmpty else {
+                throw MiBandWatchfaceProtocolError.malformedProtobuf
+            }
+            let name = info.bytes(2).flatMap { String(data: $0, encoding: .utf8) } ?? identifier
+            return WatchfaceInfo(
+                identifier: identifier,
+                name: name,
+                isActive: info.varint(3) == 1,
+                canDelete: info.varint(4) == 1
+            )
+        }
     }
 
     private static func fieldVarint(_ number: UInt64, _ value: UInt64) -> Data {
@@ -132,6 +228,10 @@ enum MiBandWatchfaceProtocol {
 
         func bytes(_ number: UInt64) -> Data? {
             values.first { $0.number == number && $0.bytes != nil }?.bytes
+        }
+
+        func allBytes(_ number: UInt64) -> [Data] {
+            values.compactMap { $0.number == number ? $0.bytes : nil }
         }
     }
 

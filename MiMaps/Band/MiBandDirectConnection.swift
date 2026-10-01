@@ -19,9 +19,19 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     @Published private(set) var lastIconRequestDescription: String?
     @Published private(set) var iconUploadDescription: String = "chưa bắt đầu"
     @Published private(set) var pictureModeDescription: String = "chưa bắt đầu"
+    @Published private(set) var firmwareVersion: String?
+    @Published private(set) var batteryLevel: Int?
+    @Published private(set) var watchfaces: [MiBandWatchfaceProtocol.WatchfaceInfo] = []
+    @Published private(set) var previousWatchfaceIdentifier: String?
+    @Published private(set) var watchfaceInstallationState: MiBandWatchfaceInstallationState = .unavailable
+    @Published private(set) var fullscreenNavigationEnabled = false
+    @Published private(set) var watchfaceUploadDescription = "chưa bắt đầu"
 
     private enum StorageKey {
         static let peripheralIdentifier = "directMiBandPeripheralIdentifier"
+        static let previousWatchfaceIdentifier = "directMiBandPreviousWatchfaceIdentifier"
+        static let watchfaceIdentifierCounter = "directMiBandWatchfaceIdentifierCounter"
+        static let generatedWatchfaceIdentifiers = "directMiBandGeneratedWatchfaceIdentifiers"
     }
 
     private var central: CBCentralManager!
@@ -46,7 +56,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var uploadedIconManeuver: NavigationManeuver?
     private var dataUploadManeuver: NavigationManeuver?
     private var lastIconPackageName: String?
-    private var pendingIconBytes: Data?
+    private var pendingUploadBytes: Data?
+    private var dataUploadPurpose: DataUploadPurpose?
     private var dataUploadParts: [Data] = []
     private var nextDataUploadPartIndex = 0
     private var auxiliaryFrames: [Data] = []
@@ -54,6 +65,14 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var pendingDataUploadControlFrame: Data?
     private var dataUploadAttemptID: UUID?
     private var dataUploadPhase: DataUploadPhase = .idle
+    private var preparedWatchfacePackage: MiBandWatchfacePackage?
+    private var activeMiMapsWatchfaceIdentifier: String?
+    private var pendingRealtimeInstruction: NavigationInstruction?
+    private var lastFullscreenInstruction: NavigationInstruction?
+    private var lastFullscreenUpdateTimestamp: Date?
+    private var fullscreenRiskAcknowledgedForSession = false
+    private var restoreRequestedAfterTransfer = false
+    private let watchfaceRealtimePolicy = MiBandWatchfaceRealtimePolicy()
     private let defaults: UserDefaults
     private let now: () -> Date
     private let credentialStore: MiBandCredentialStoring
@@ -96,6 +115,25 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         static let maximumFrameLength = 244
     }
 
+    private enum DataUploadPurpose: Equatable {
+        case notificationIcon(NavigationManeuver?)
+        case watchface(identifier: String)
+
+        var type: UInt8 {
+            switch self {
+            case .notificationIcon: MiBandDataUploadProtocol.notificationIconType
+            case .watchface: MiBandWatchfaceProtocol.uploadType
+            }
+        }
+
+        var noun: String {
+            switch self {
+            case .notificationIcon: "icon"
+            case .watchface: "mặt đồng hồ"
+            }
+        }
+    }
+
     private enum DataUploadPhase: String {
         case idle
         case enablingNotifications
@@ -124,6 +162,9 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         self.now = now
         self.credentialStore = credentialStore
         self.notificationIconCache = MiBandNotificationIconCache(defaults: defaults)
+        self.previousWatchfaceIdentifier = defaults.string(
+            forKey: StorageKey.previousWatchfaceIdentifier
+        )
         self.nextNotificationIdentifier = MiBandNotificationProtocol
             .sessionNotificationIdentifier(at: now())
         super.init()
@@ -289,6 +330,119 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         )
     }
 
+    func refreshWatchfaceState() {
+        guard canSendDirectNotifications else {
+            watchfaceInstallationState = .failed(
+                MiBandWatchfaceSafetyError.notConnected.localizedDescription
+            )
+            return
+        }
+        requestDeviceInformation()
+        watchfaceInstallationState = .awaitingDeviceInfo
+        enqueueCommand(
+            MiBandWatchfaceProtocol.makeListCommand(),
+            label: "đọc danh sách mặt đồng hồ"
+        )
+    }
+
+    @discardableResult
+    func prepareFullscreenPackage(_ instruction: NavigationInstruction) -> MiBandWatchfacePackage? {
+        do {
+            let package = try MiBandNavigationCardRenderer.watchfacePackage(
+                instruction,
+                identifier: takeNextWatchfaceIdentifier()
+            )
+            preparedWatchfacePackage = package
+            watchfaceInstallationState = .packageReady(
+                identifier: package.identifier,
+                byteCount: package.bytes.count
+            )
+            watchfaceUploadDescription = "đã kiểm tra \(package.bytes.count) byte"
+            appendEvent(
+                "Đã tạo gói điều hướng toàn màn hình \(package.identifier), "
+                    + "\(package.bytes.count) byte"
+            )
+            return package
+        } catch {
+            watchfaceInstallationState = .failed(error.localizedDescription)
+            watchfaceUploadDescription = "lỗi tạo gói: \(error.localizedDescription)"
+            appendEvent("Không thể tạo gói toàn màn hình: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    func installPreparedFullscreenWatchface(riskAcknowledged: Bool) {
+        do {
+            try MiBandWatchfaceSafetySnapshot(
+                isConnectedAndAuthenticated: canSendDirectNotifications,
+                firmwareVersion: firmwareVersion,
+                batteryLevel: batteryLevel,
+                previousWatchfaceIdentifier: previousWatchfaceIdentifier,
+                hasValidatedPackage: preparedWatchfacePackage != nil,
+                riskAcknowledged: riskAcknowledged
+            ).validate()
+            guard let package = preparedWatchfacePackage else {
+                throw MiBandWatchfaceSafetyError.packageMissing
+            }
+            fullscreenRiskAcknowledgedForSession = true
+            startWatchfaceInstallation(package)
+        } catch {
+            watchfaceInstallationState = .failed(error.localizedDescription)
+            appendEvent("Chặn cài mặt đồng hồ: \(error.localizedDescription)")
+        }
+    }
+
+    func restorePreviousWatchface() {
+        guard canSendDirectNotifications else {
+            watchfaceInstallationState = .failed(
+                MiBandWatchfaceSafetyError.notConnected.localizedDescription
+            )
+            return
+        }
+        guard let identifier = previousWatchfaceIdentifier else {
+            watchfaceInstallationState = .failed(
+                MiBandWatchfaceSafetyError.activeWatchfaceUnknown.localizedDescription
+            )
+            return
+        }
+        fullscreenNavigationEnabled = false
+        pendingRealtimeInstruction = nil
+        if dataUploadPhase != .idle || isWatchfaceTransitionInProgress {
+            restoreRequestedAfterTransfer = true
+            appendEvent("Đã xếp yêu cầu khôi phục sau khi phiên hiện tại kết thúc")
+            return
+        }
+        watchfaceInstallationState = .restoring(identifier: identifier)
+        appendEvent("Khôi phục mặt đồng hồ trước đó \(identifier)")
+        enqueueCommand(
+            MiBandWatchfaceProtocol.makeSetCommand(identifier: identifier),
+            label: "khôi phục mặt đồng hồ \(identifier)"
+        )
+    }
+
+    func sendNavigationInstruction(
+        _ instruction: NavigationInstruction,
+        title: String,
+        body: String,
+        label: String
+    ) {
+        guard fullscreenNavigationEnabled else {
+            sendDirectNotification(
+                title: title,
+                body: body,
+                label: label,
+                maneuver: instruction.maneuver
+            )
+            return
+        }
+        queueFullscreenNavigationUpdate(instruction)
+    }
+
+    func stopFullscreenNavigation() {
+        guard fullscreenNavigationEnabled else { return }
+        restorePreviousWatchface()
+    }
+
     func sendDirectNotification(
         title: String,
         body: String,
@@ -352,6 +506,82 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         return identifier
     }
 
+    private func takeNextWatchfaceIdentifier() -> String {
+        let previous = defaults.integer(forKey: StorageKey.watchfaceIdentifierCounter)
+        let next = previous >= 999_999 ? 1 : previous + 1
+        defaults.set(next, forKey: StorageKey.watchfaceIdentifierCounter)
+        return String(format: "298%06d", next)
+    }
+
+    private func startWatchfaceInstallation(_ package: MiBandWatchfacePackage) {
+        guard dataUploadPhase == .idle else {
+            watchfaceInstallationState = .failed("Một phiên upload khác đang chạy.")
+            return
+        }
+        preparedWatchfacePackage = package
+        rememberGeneratedWatchfaceIdentifier(package.identifier)
+        watchfaceInstallationState = .requestingInstall(identifier: package.identifier)
+        watchfaceUploadDescription = "đang yêu cầu cài \(package.identifier)"
+        appendEvent(
+            "Mở phiên cài mặt đồng hồ \(package.identifier), \(package.bytes.count) byte"
+        )
+        enqueueCommand(
+            MiBandWatchfaceProtocol.makeInstallStartCommand(
+                identifier: package.identifier,
+                byteCount: package.bytes.count
+            ),
+            label: "mở phiên cài \(package.identifier)"
+        )
+    }
+
+    private func queueFullscreenNavigationUpdate(_ instruction: NavigationInstruction) {
+        guard fullscreenRiskAcknowledgedForSession else {
+            fullscreenNavigationEnabled = false
+            watchfaceInstallationState = .failed("Phiên này chưa xác nhận rủi ro.")
+            return
+        }
+        guard watchfaceRealtimePolicy.shouldBuild(
+            previousTimestamp: lastFullscreenUpdateTimestamp,
+            previousInstruction: lastFullscreenInstruction,
+            next: instruction
+        ) else { return }
+
+        if dataUploadPhase != .idle
+            || pendingCommand != nil
+            || !queuedCommands.isEmpty
+            || isWatchfaceTransitionInProgress {
+            pendingRealtimeInstruction = instruction
+            appendEvent("Đã gộp cập nhật toàn màn hình; giữ chỉ dẫn mới nhất")
+            return
+        }
+        guard let package = prepareFullscreenPackage(instruction) else { return }
+        lastFullscreenInstruction = instruction
+        lastFullscreenUpdateTimestamp = instruction.timestamp
+        startWatchfaceInstallation(package)
+    }
+
+    private var isWatchfaceTransitionInProgress: Bool {
+        switch watchfaceInstallationState {
+        case .requestingInstall, .uploading, .activating, .restoring:
+            true
+        default:
+            false
+        }
+    }
+
+    private func rememberGeneratedWatchfaceIdentifier(_ identifier: String) {
+        var identifiers = Set(
+            defaults.stringArray(forKey: StorageKey.generatedWatchfaceIdentifiers) ?? []
+        )
+        identifiers.insert(identifier)
+        defaults.set(Array(identifiers).sorted(), forKey: StorageKey.generatedWatchfaceIdentifiers)
+    }
+
+    private func isGeneratedWatchfaceIdentifier(_ identifier: String) -> Bool {
+        Set(defaults.stringArray(forKey: StorageKey.generatedWatchfaceIdentifiers) ?? [])
+            .contains(identifier)
+    }
+
     func forgetDevice() {
         disconnect()
         defaults.removeObject(forKey: StorageKey.peripheralIdentifier)
@@ -403,6 +633,12 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             "Last decrypted command: \(lastDecryptedCommandPreview ?? "—")",
             "Last icon request: \(lastIconRequestDescription ?? "—")",
             "Icon upload: \(iconUploadDescription)",
+            "Firmware: \(firmwareVersion ?? "—")",
+            "Battery: \(batteryLevel.map { "\($0)%" } ?? "—")",
+            "Previous watchface: \(previousWatchfaceIdentifier ?? "—")",
+            "Fullscreen navigation: \(fullscreenNavigationEnabled ? "enabled" : "disabled")",
+            "Watchface state: \(watchfaceInstallationState.localizedDescription)",
+            "Watchface upload: \(watchfaceUploadDescription)",
             "Encrypted commands sent: \(sentCommandCount)",
             "Captured packets: \(capturedPackets.count)",
             ""
@@ -440,6 +676,16 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         state = .ready(name)
         defaults.set(peripheral.identifier.uuidString, forKey: StorageKey.peripheralIdentifier)
         appendEvent("Khám phá GATT hoàn tất: \(characteristics.count) characteristic")
+        requestDeviceInformation()
+    }
+
+    private func requestDeviceInformation() {
+        guard let peripheral = connectedPeripheral else { return }
+        for key in ["180A/2A26", "180F/2A19"] {
+            guard let characteristic = characteristicHandles[key],
+                  characteristic.properties.contains(.read) else { continue }
+            peripheral.readValue(for: characteristic)
+        }
     }
 
     private func refreshSavedKeyState() {
@@ -582,6 +828,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                 outgoingEncryptionCounter = 1
                 directNotificationState = .ready
                 appendEvent("Xác thực trực tiếp Xiaomi Smart Band 8 thành công")
+                refreshWatchfaceState()
             default:
                 break
             }
@@ -611,7 +858,15 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             lastDecryptedCommandPreview = MiBandCapturedPacket.preview(command, limit: 96)
             appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
 
-            if let package = try MiBandNotificationIconProtocol.packageQuery(from: command) {
+            if let list = try MiBandWatchfaceProtocol.watchfaceList(from: command) {
+                handleWatchfaceList(list)
+            } else if let status = try MiBandWatchfaceProtocol.installStatus(from: command) {
+                try handleWatchfaceInstallStatus(status)
+            } else if let acknowledgement = try MiBandWatchfaceProtocol.setAcknowledgement(from: command) {
+                handleWatchfaceSetAcknowledgement(acknowledgement)
+            } else if let acknowledgement = try MiBandWatchfaceProtocol.deleteAcknowledgement(from: command) {
+                appendEvent("Band ACK xóa mặt đồng hồ: \(acknowledgement)")
+            } else if let package = try MiBandNotificationIconProtocol.packageQuery(from: command) {
                 guard package.hasPrefix("com.mimaps") else {
                     appendEvent("Bỏ qua yêu cầu icon không thuộc MiMaps: \(package)")
                     return
@@ -643,7 +898,117 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             }
         } catch {
             directNotificationState = .failed(error.localizedDescription)
+            if isWatchfaceTransitionInProgress {
+                watchfaceInstallationState = .failed(error.localizedDescription)
+                watchfaceUploadDescription = "lỗi giao thức: \(error.localizedDescription)"
+            }
             appendEvent("Đã ACK nhưng không giải mã được gói phiên: \(error.localizedDescription)")
+        }
+    }
+
+    private func handleWatchfaceList(_ list: [MiBandWatchfaceProtocol.WatchfaceInfo]) {
+        watchfaces = list
+        if let active = list.first(where: \.isActive) {
+            if isGeneratedWatchfaceIdentifier(active.identifier) {
+                activeMiMapsWatchfaceIdentifier = active.identifier
+            } else {
+                previousWatchfaceIdentifier = active.identifier
+                defaults.set(active.identifier, forKey: StorageKey.previousWatchfaceIdentifier)
+            }
+            appendEvent(
+                "Mặt đồng hồ hiện tại: \(active.identifier) (\(active.name)); "
+                    + "đã lưu đích khôi phục"
+            )
+        } else {
+            appendEvent("Danh sách mặt đồng hồ không có mục active")
+        }
+        if !isWatchfaceTransitionInProgress {
+            if let package = preparedWatchfacePackage {
+                watchfaceInstallationState = .packageReady(
+                    identifier: package.identifier,
+                    byteCount: package.bytes.count
+                )
+            } else {
+                watchfaceInstallationState = .ready
+            }
+        }
+    }
+
+    private func handleWatchfaceInstallStatus(_ status: UInt64) throws {
+        guard case let .requestingInstall(identifier) = watchfaceInstallationState,
+              let package = preparedWatchfacePackage,
+              package.identifier == identifier else {
+            appendEvent("Bỏ qua trạng thái cài mặt đồng hồ ngoài phiên MiMaps: \(status)")
+            return
+        }
+        guard status == 0 else {
+            throw MiBandWatchfaceProtocolError.installRejected(status: status)
+        }
+        appendEvent("Band chấp nhận cài \(identifier); bắt đầu upload type 16")
+        try beginDataUpload(
+            bytes: package.bytes,
+            purpose: .watchface(identifier: identifier)
+        )
+    }
+
+    private func handleWatchfaceSetAcknowledgement(_ acknowledgement: UInt64) {
+        guard acknowledgement <= 1 else {
+            watchfaceInstallationState = .failed(
+                "Band từ chối kích hoạt, ACK=\(acknowledgement)."
+            )
+            return
+        }
+        switch watchfaceInstallationState {
+        case let .activating(identifier):
+            let previousGenerated = activeMiMapsWatchfaceIdentifier
+            activeMiMapsWatchfaceIdentifier = identifier
+            fullscreenNavigationEnabled = !restoreRequestedAfterTransfer
+            watchfaceInstallationState = .active(identifier: identifier)
+            watchfaceUploadDescription = "đã kích hoạt \(identifier)"
+            appendEvent("Đã kích hoạt mặt điều hướng toàn màn hình \(identifier)")
+            if let previousGenerated,
+               previousGenerated != identifier,
+               isGeneratedWatchfaceIdentifier(previousGenerated) {
+                enqueueCommand(
+                    MiBandWatchfaceProtocol.makeDeleteCommand(identifier: previousGenerated),
+                    label: "dọn mặt MiMaps cũ \(previousGenerated)"
+                )
+            }
+            enqueueCommand(
+                MiBandWatchfaceProtocol.makeListCommand(),
+                label: "xác minh mặt đồng hồ đã kích hoạt"
+            )
+            if restoreRequestedAfterTransfer {
+                restoreRequestedAfterTransfer = false
+                restorePreviousWatchface()
+            } else {
+                processPendingRealtimeInstructionAfterTransition()
+            }
+        case let .restoring(identifier):
+            let generated = activeMiMapsWatchfaceIdentifier
+            activeMiMapsWatchfaceIdentifier = nil
+            fullscreenNavigationEnabled = false
+            fullscreenRiskAcknowledgedForSession = false
+            watchfaceInstallationState = .restored(identifier: identifier)
+            watchfaceUploadDescription = "đã khôi phục \(identifier)"
+            appendEvent("Đã khôi phục mặt đồng hồ \(identifier)")
+            if let generated, isGeneratedWatchfaceIdentifier(generated) {
+                enqueueCommand(
+                    MiBandWatchfaceProtocol.makeDeleteCommand(identifier: generated),
+                    label: "xóa mặt MiMaps sau khôi phục \(generated)"
+                )
+            }
+        default:
+            appendEvent("Nhận ACK kích hoạt ngoài phiên chuyển mặt đồng hồ")
+        }
+    }
+
+    private func processPendingRealtimeInstructionAfterTransition() {
+        guard let instruction = pendingRealtimeInstruction else { return }
+        pendingRealtimeInstruction = nil
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            self?.queueFullscreenNavigationUpdate(instruction)
         }
     }
 
@@ -801,8 +1166,17 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         } else {
             directNotificationState = .failed("Band trả ACK mã \(result) cho \(item.label).")
             appendEvent("Band từ chối lệnh \(item.label), ACK=\(result)")
+            if isWatchfaceTransitionInProgress {
+                watchfaceInstallationState = .failed(
+                    "Band từ chối \(item.label), ACK=\(result)."
+                )
+                fullscreenNavigationEnabled = false
+            }
         }
         sendNextQueuedCommandIfPossible()
+        if pendingCommand == nil, queuedCommands.isEmpty, fullscreenNavigationEnabled {
+            processPendingRealtimeInstructionAfterTransition()
+        }
     }
 
     private func scheduleCommandAcknowledgementTimeout(for id: UUID) {
@@ -813,6 +1187,10 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             self.pendingCommand = nil
             self.directNotificationState = .failed("Band không ACK \(label).")
             self.appendEvent("Hết thời gian chờ Band ACK: \(label)")
+            if self.isWatchfaceTransitionInProgress {
+                self.watchfaceInstallationState = .failed("Band không ACK \(label).")
+                self.fullscreenNavigationEnabled = false
+            }
             self.sendNextQueuedCommandIfPossible()
         }
     }
@@ -840,41 +1218,50 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             pictureModeDescription = "đang upload icon"
             return
         }
-        guard let peripheral = connectedPeripheral,
-              let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload] else {
-            throw MiBandDataUploadProtocolError.malformedProtobuf
-        }
-
-        pendingIconBytes = try MiBandManeuverIconRenderer.pixelData(
+        let bytes = try MiBandManeuverIconRenderer.pixelData(
             maneuver: maneuver,
             size: Int(request.size),
             pixelFormat: Int(request.pixelFormat)
         )
         dataUploadManeuver = maneuver
-        dataUploadAttemptID = UUID()
-        iconUploadDescription = "chuẩn bị \(pendingIconBytes?.count ?? 0) byte"
+        iconUploadDescription = "chuẩn bị \(bytes.count) byte"
+        try beginDataUpload(bytes: bytes, purpose: .notificationIcon(maneuver))
+    }
+
+    private func beginDataUpload(bytes: Data, purpose: DataUploadPurpose) throws {
+        guard dataUploadPhase == .idle else {
+            throw MiBandDataUploadProtocolError.uploadAlreadyInProgress
+        }
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload] else {
+            throw MiBandDataUploadProtocolError.malformedProtobuf
+        }
+
+        pendingUploadBytes = bytes
+        dataUploadPurpose = purpose
 
         if characteristic.isNotifying {
-            requestPendingIconUpload()
+            requestPendingDataUpload()
         } else {
             dataUploadPhase = .enablingNotifications
-            appendEvent("Bật notify FE95/0055 để truyền pixel icon")
+            appendEvent("Bật notify FE95/0055 để truyền \(purpose.noun)")
             peripheral.setNotifyValue(true, for: characteristic)
             scheduleDataUploadTimeout()
         }
     }
 
-    private func requestPendingIconUpload() {
-        guard let bytes = pendingIconBytes else { return }
+    private func requestPendingDataUpload() {
+        guard let bytes = pendingUploadBytes,
+              let purpose = dataUploadPurpose else { return }
         dataUploadPhase = .waitingRequestAcknowledgement
-        iconUploadDescription = "đang thương lượng upload \(bytes.count) byte"
-        appendEvent("Yêu cầu Band mở phiên upload icon \(bytes.count) byte")
+        updateDataUploadDescription("đang thương lượng upload \(bytes.count) byte")
+        appendEvent("Yêu cầu Band mở phiên upload \(purpose.noun) \(bytes.count) byte")
         enqueueCommand(
             MiBandDataUploadProtocol.makeUploadRequest(
-                type: MiBandDataUploadProtocol.notificationIconType,
+                type: purpose.type,
                 bytes: bytes
             ),
-            label: "yêu cầu upload icon"
+            label: "yêu cầu upload \(purpose.noun)"
         )
         scheduleDataUploadTimeout()
     }
@@ -883,54 +1270,24 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         _ acknowledgement: MiBandDataUploadAcknowledgement
     ) throws {
         guard dataUploadPhase == .waitingRequestAcknowledgement,
-              let bytes = pendingIconBytes else { return }
+              let bytes = pendingUploadBytes,
+              let purpose = dataUploadPurpose else { return }
         dataUploadParts = try MiBandDataUploadProtocol.uploadParts(
-            type: MiBandDataUploadProtocol.notificationIconType,
+            type: purpose.type,
             bytes: bytes,
             chunkSize: acknowledgement.chunkSize
         )
         nextDataUploadPartIndex = 0
         appendEvent(
-            "Band chấp nhận icon; truyền \(dataUploadParts.count) phần, chunk=\(acknowledgement.chunkSize)"
+            "Band chấp nhận \(purpose.noun); truyền \(dataUploadParts.count) phần, "
+                + "chunk=\(acknowledgement.chunkSize)"
         )
         sendNextDataUploadPart()
     }
 
     private func sendNextDataUploadPart() {
         guard nextDataUploadPartIndex < dataUploadParts.count else {
-            let byteCount = pendingIconBytes?.count ?? 0
-            let completedManeuver = dataUploadManeuver
-            uploadedIconManeuver = completedManeuver
-            if let package = lastIconPackageName {
-                notificationIconCache.insert(
-                    package: package,
-                    deviceIdentifier: connectedPeripheral?.identifier
-                )
-            }
-            appendEvent("Upload pixel icon hoàn tất: \(byteCount) byte")
-            resetDataUpload(description: "hoàn tất \(byteCount) byte")
-            let followUp = MiBandIconUploadFollowUp.resolve(
-                pendingManeuver: pendingPictureNotification?.maneuver,
-                completedManeuver: completedManeuver
-            )
-            switch followUp {
-            case .deliverPendingNotification:
-                pictureModeDescription = "icon đã sẵn sàng; gửi thông báo"
-                deliverPendingPictureNotification()
-            case .restartForUpdatedManeuver:
-                pictureModeAttemptID = nil
-                appendEvent("Hướng rẽ đã đổi trong lúc upload; mở picture mode cho chỉ dẫn mới nhất")
-                restartPendingPictureModeRequest()
-            case .cacheAdditionalSize:
-                // A single notification can make Band 8 request the same app
-                // icon at 28, 44 and 80 points. The first completed upload has
-                // already released the pending navigation notification. Later
-                // sizes only populate firmware caches; they are not evidence
-                // that the maneuver changed and must not restart the handshake.
-                pictureModeAttemptID = nil
-                pictureModeDescription = "đã lưu thêm icon \(byteCount) byte vào cache"
-                appendEvent("Đã hoàn tất kích thước icon phụ; không gửi lặp thông báo")
-            }
+            completeDataUpload()
             return
         }
         guard let peripheral = connectedPeripheral,
@@ -987,7 +1344,16 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                 )
             }
             let mode = writeType == .withoutResponse ? "WNR" : "WR"
-            iconUploadDescription = "đang gửi phần \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count), MTU=\(maximumLength), \(mode)"
+            let progress = Int(
+                Double(nextDataUploadPartIndex) / Double(max(dataUploadParts.count, 1)) * 100
+            )
+            updateDataUploadDescription(
+                "đang gửi phần \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count), "
+                    + "MTU=\(maximumLength), \(mode)"
+            )
+            if case .some(.watchface(identifier: _)) = dataUploadPurpose {
+                watchfaceInstallationState = .uploading(progressPercent: progress)
+            }
             appendEvent("FE95/0055 dùng \(mode), khung tối đa \(maximumLength) byte")
             scheduleDataUploadTimeout()
         } catch {
@@ -1061,14 +1427,17 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             }
         }
         dataUploadPhase = .waitingChunkEndAcknowledgement
-        appendEvent("Đã xếp đủ \(auxiliaryFrames.count) frame icon vào hàng đợi Bluetooth")
+        appendEvent(
+            "Đã xếp đủ \(auxiliaryFrames.count) frame "
+                + "\(dataUploadPurpose?.noun ?? "dữ liệu") vào hàng đợi Bluetooth"
+        )
     }
 
     private func handleDataUploadChannelPacket(_ data: Data) {
         if data == Data([0, 0, 1, 1]) {
             guard dataUploadPhase == .waitingChunkStartAcknowledgement
                     || dataUploadPhase == .writingChunkStart else { return }
-            appendEvent("Band ACK bắt đầu khối icon")
+            appendEvent("Band ACK bắt đầu khối \(dataUploadPurpose?.noun ?? "dữ liệu")")
             sendAvailableAuxiliaryFrames()
             return
         }
@@ -1089,7 +1458,10 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                 return
             }
             pendingAuxiliaryFrameIndexes = validIndexes
-            appendEvent("Band yêu cầu gửi lại frame icon: \(requestedIndexes.map(String.init).joined(separator: ", "))")
+            appendEvent(
+                "Band yêu cầu gửi lại frame \(dataUploadPurpose?.noun ?? "dữ liệu"): "
+                    + requestedIndexes.map(String.init).joined(separator: ", ")
+            )
             sendAvailableAuxiliaryFrames()
             return
         }
@@ -1097,7 +1469,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             guard dataUploadPhase == .waitingSingleAcknowledgement
                     || dataUploadPhase == .writingSingleFrame else { return }
             guard data.last == 0 else {
-                failDataUpload("Band từ chối khối icon, ACK=\(data.last ?? 255).")
+                failDataUpload("Band từ chối khối dữ liệu, ACK=\(data.last ?? 255).")
                 return
             }
             completeCurrentDataUploadPart()
@@ -1109,12 +1481,73 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     }
 
     private func completeCurrentDataUploadPart() {
-        appendEvent("Band nhận phần icon \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count)")
+        let noun = dataUploadPurpose?.noun ?? "dữ liệu"
+        appendEvent("Band nhận phần \(noun) \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count)")
         nextDataUploadPartIndex += 1
         auxiliaryFrames = []
         pendingAuxiliaryFrameIndexes = []
         pendingDataUploadControlFrame = nil
         sendNextDataUploadPart()
+    }
+
+    private func completeDataUpload() {
+        let byteCount = pendingUploadBytes?.count ?? 0
+        let purpose = dataUploadPurpose
+        let completedManeuver = dataUploadManeuver
+        appendEvent("Upload \(purpose?.noun ?? "dữ liệu") hoàn tất: \(byteCount) byte")
+        resetDataUpload(description: "hoàn tất \(byteCount) byte")
+
+        switch purpose {
+        case .some(.notificationIcon(_)):
+            uploadedIconManeuver = completedManeuver
+            if let package = lastIconPackageName {
+                notificationIconCache.insert(
+                    package: package,
+                    deviceIdentifier: connectedPeripheral?.identifier
+                )
+            }
+            let followUp = MiBandIconUploadFollowUp.resolve(
+                pendingManeuver: pendingPictureNotification?.maneuver,
+                completedManeuver: completedManeuver
+            )
+            switch followUp {
+            case .deliverPendingNotification:
+                pictureModeDescription = "icon đã sẵn sàng; gửi thông báo"
+                deliverPendingPictureNotification()
+            case .restartForUpdatedManeuver:
+                pictureModeAttemptID = nil
+                appendEvent("Hướng rẽ đã đổi trong lúc upload; mở picture mode cho chỉ dẫn mới nhất")
+                restartPendingPictureModeRequest()
+            case .cacheAdditionalSize:
+                pictureModeAttemptID = nil
+                pictureModeDescription = "đã lưu thêm icon \(byteCount) byte vào cache"
+                appendEvent("Đã hoàn tất kích thước icon phụ; không gửi lặp thông báo")
+            }
+        case let .some(.watchface(identifier)):
+            if restoreRequestedAfterTransfer,
+               let restoreIdentifier = previousWatchfaceIdentifier {
+                restoreRequestedAfterTransfer = false
+                watchfaceInstallationState = .restoring(identifier: restoreIdentifier)
+                watchfaceUploadDescription = "đã upload nhưng bỏ kích hoạt; đang khôi phục"
+                enqueueCommand(
+                    MiBandWatchfaceProtocol.makeSetCommand(identifier: restoreIdentifier),
+                    label: "khôi phục mặt đồng hồ \(restoreIdentifier)"
+                )
+                enqueueCommand(
+                    MiBandWatchfaceProtocol.makeDeleteCommand(identifier: identifier),
+                    label: "xóa gói MiMaps chưa kích hoạt \(identifier)"
+                )
+            } else {
+                watchfaceInstallationState = .activating(identifier: identifier)
+                watchfaceUploadDescription = "upload xong; đang kích hoạt \(identifier)"
+                enqueueCommand(
+                    MiBandWatchfaceProtocol.makeSetCommand(identifier: identifier),
+                    label: "kích hoạt mặt đồng hồ \(identifier)"
+                )
+            }
+        case .none:
+            break
+        }
     }
 
     private func handleSuccessfulDataChannelWrite() {
@@ -1131,25 +1564,37 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     }
 
     private func scheduleDataUploadTimeout() {
-        guard let attemptID = dataUploadAttemptID else { return }
+        let attemptID = UUID()
+        dataUploadAttemptID = attemptID
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(12))
             guard let self,
                   self.dataUploadAttemptID == attemptID,
                   self.dataUploadPhase != .idle else { return }
-            self.failDataUpload("Hết thời gian chờ truyền icon.")
+            self.failDataUpload("Hết thời gian chờ truyền dữ liệu.")
         }
     }
 
     private func failDataUpload(_ message: String) {
-        appendEvent("Upload icon thất bại: \(message)")
+        let purpose = dataUploadPurpose
+        appendEvent("Upload \(purpose?.noun ?? "dữ liệu") thất bại: \(message)")
         resetDataUpload(description: "lỗi: \(message)")
-        pictureModeDescription = "upload icon lỗi; gửi text dự phòng"
-        deliverPendingPictureNotification()
+        switch purpose {
+        case .some(.notificationIcon(_)):
+            pictureModeDescription = "upload icon lỗi; gửi text dự phòng"
+            deliverPendingPictureNotification()
+        case .some(.watchface(identifier: _)):
+            watchfaceInstallationState = .failed(message)
+            watchfaceUploadDescription = "lỗi: \(message)"
+            fullscreenNavigationEnabled = false
+        case .none:
+            break
+        }
     }
 
     private func resetDataUpload(description: String) {
-        pendingIconBytes = nil
+        let purpose = dataUploadPurpose
+        pendingUploadBytes = nil
         dataUploadParts = []
         nextDataUploadPartIndex = 0
         auxiliaryFrames = []
@@ -1158,7 +1603,22 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         dataUploadAttemptID = nil
         dataUploadPhase = .idle
         dataUploadManeuver = nil
-        iconUploadDescription = description
+        dataUploadPurpose = nil
+        switch purpose {
+        case .some(.notificationIcon(_)), .none:
+            iconUploadDescription = description
+        case .some(.watchface(identifier: _)):
+            watchfaceUploadDescription = description
+        }
+    }
+
+    private func updateDataUploadDescription(_ description: String) {
+        switch dataUploadPurpose {
+        case .some(.notificationIcon(_)), .none:
+            iconUploadDescription = description
+        case .some(.watchface(identifier: _)):
+            watchfaceUploadDescription = description
+        }
     }
 
     private func resetSecureSession() {
@@ -1180,6 +1640,16 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         pictureModeAttemptID = nil
         pictureModeDescription = "chưa bắt đầu"
         resetDataUpload(description: "chưa bắt đầu")
+        preparedWatchfacePackage = nil
+        pendingRealtimeInstruction = nil
+        lastFullscreenInstruction = nil
+        lastFullscreenUpdateTimestamp = nil
+        activeMiMapsWatchfaceIdentifier = nil
+        fullscreenRiskAcknowledgedForSession = false
+        restoreRequestedAfterTransfer = false
+        fullscreenNavigationEnabled = false
+        watchfaceInstallationState = .unavailable
+        watchfaceUploadDescription = "chưa bắt đầu"
     }
 
     private func writeValue(_ data: Data, to characteristic: CBCharacteristic, peripheral: CBPeripheral) {
@@ -1423,7 +1893,7 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
         advanceAuthenticationSubscriptions(notifiedKey: resolvedKey, peripheral: peripheral)
         if resolvedKey == ProtocolCharacteristic.dataUpload,
            dataUploadPhase == .enablingNotifications {
-            requestPendingIconUpload()
+            requestPendingDataUpload()
         }
     }
 
@@ -1468,6 +1938,23 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
             return
         }
         guard let data = characteristic.value else { return }
+        if let serviceUUID = characteristic.service?.uuid {
+            let key = Self.characteristicKey(
+                service: serviceUUID,
+                characteristic: characteristic.uuid
+            )
+            if key == "180A/2A26" {
+                firmwareVersion = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .controlCharacters.union(.whitespacesAndNewlines))
+                appendEvent("Firmware Band: \(firmwareVersion ?? "không đọc được")")
+                return
+            }
+            if key == "180F/2A19", let level = data.first {
+                batteryLevel = Int(level)
+                appendEvent("Pin Band: \(level)%")
+                return
+            }
+        }
         if isCapturingPackets {
             capturedPackets.append(
                 MiBandCapturedPacket(

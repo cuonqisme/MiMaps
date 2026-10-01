@@ -3,15 +3,13 @@ import XCTest
 
 final class MiBandWatchfaceProtocolTests: XCTestCase {
     func testValidatesStandardBand8WatchfaceHeaderAndIdentifier() throws {
-        var bytes = Data(repeating: 0, count: 0x90)
-        bytes[0] = 0x5A
-        bytes[1] = 0xA5
-        bytes.replaceSubrange(0x28..<(0x28 + 9), with: Data("266240005".utf8))
-
-        let package = try MiBandWatchfacePackage(bytes: bytes)
+        let package = try MiBandWatchfaceBuilder.build(
+            identifier: "266240005",
+            bgraPixels: Data(repeating: 0, count: 192 * 490 * 4)
+        )
 
         XCTAssertEqual(package.identifier, "266240005")
-        XCTAssertEqual(package.bytes, bytes)
+        XCTAssertGreaterThan(package.bytes.count, 0x90)
     }
 
     func testRejectsNonWatchfacePayloads() {
@@ -44,6 +42,55 @@ final class MiBandWatchfaceProtocolTests: XCTestCase {
         XCTAssertEqual(
             command.map { String(format: "%02X", $0) }.joined(),
             "08041001320B1209323636323430303035"
+        )
+    }
+
+    func testBuildsDeleteCommand() {
+        let command = MiBandWatchfaceProtocol.makeDeleteCommand(identifier: "298000001")
+
+        XCTAssertEqual(
+            command.map { String(format: "%02X", $0) }.joined(),
+            "08041002320B1209323938303030303031"
+        )
+    }
+
+    func testBuildsListCommandAndParsesActiveRestoreTarget() throws {
+        XCTAssertEqual(
+            MiBandWatchfaceProtocol.makeListCommand(),
+            Data([0x08, 0x04, 0x10, 0x00])
+        )
+        let info = Data([
+            0x0A, 0x03, 0x31, 0x32, 0x33,
+            0x12, 0x04, 0x54, 0x65, 0x73, 0x74,
+            0x18, 0x01,
+            0x20, 0x00
+        ])
+        var list = Data([0x0A, UInt8(info.count)])
+        list.append(info)
+        var watchface = Data([0x0A, UInt8(list.count)])
+        watchface.append(list)
+        var command = Data([0x08, 0x04, 0x10, 0x00, 0x32, UInt8(watchface.count)])
+        command.append(watchface)
+
+        XCTAssertEqual(
+            try MiBandWatchfaceProtocol.watchfaceList(from: command),
+            [
+                MiBandWatchfaceProtocol.WatchfaceInfo(
+                    identifier: "123",
+                    name: "Test",
+                    isActive: true,
+                    canDelete: false
+                )
+            ]
+        )
+    }
+
+    func testParsesSetAcknowledgement() throws {
+        XCTAssertEqual(
+            try MiBandWatchfaceProtocol.setAcknowledgement(
+                from: Data([0x08, 0x04, 0x10, 0x01, 0x32, 0x02, 0x20, 0x01])
+            ),
+            1
         )
     }
 

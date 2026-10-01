@@ -98,6 +98,26 @@ final class MiBandDataUploadProtocolTests: XCTestCase {
         XCTAssertEqual(MiBandDataUploadProtocol.crc32(Data("123456789".utf8)), 0xCBF4_3926)
     }
 
+    func testBuildsWatchfaceType16UploadWithoutChangingFraming() throws {
+        let bytes = Data([0x5A, 0xA5, 0x34, 0x12])
+        let request = MiBandDataUploadProtocol.makeUploadRequest(
+            type: MiBandWatchfaceProtocol.uploadType,
+            bytes: bytes
+        )
+        let parts = try MiBandDataUploadProtocol.uploadParts(
+            type: MiBandWatchfaceProtocol.uploadType,
+            bytes: bytes,
+            chunkSize: 64
+        )
+
+        XCTAssertTrue(request.contains(MiBandWatchfaceProtocol.uploadType))
+        XCTAssertEqual(Array(parts[0][4..<6]), [0, MiBandWatchfaceProtocol.uploadType])
+        XCTAssertEqual(
+            Data(parts[0][6..<22]),
+            MiBandDataUploadProtocol.md5(bytes)
+        )
+    }
+
     func testParsesMissingBluetoothFrameRequestCapturedFromBand8() {
         let packet = Data([0, 0, 1, 5, 2, 0, 3, 0, 4, 0, 5, 0])
 
