@@ -21,6 +21,12 @@ Version 18 also treats the later 44/80-pixel requests as cache population. It
 does not restart picture mode or send duplicate navigation notifications after
 the first successful upload.
 
+Version 19 persists the accepted package aliases per physical Band. Xiaomi's
+icon cache survives a Bluetooth reconnect; MiMaps therefore waits for the
+package query only on the first unknown alias. If the primer is acknowledged
+without a query, MiMaps records a cache hit and subsequent updates use the
+normal realtime notification path without another five-second negotiation.
+
 ## Can MiMaps show the large arrow?
 
 Yes, as an experimental temporary **watchface**, not as a notification icon and

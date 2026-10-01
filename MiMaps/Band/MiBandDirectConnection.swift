@@ -57,6 +57,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private let defaults: UserDefaults
     private let now: () -> Date
     private let credentialStore: MiBandCredentialStoring
+    private let notificationIconCache: MiBandNotificationIconCache
 
     private struct AuthenticationContext {
         let secretKey: Data
@@ -122,6 +123,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         self.defaults = defaults
         self.now = now
         self.credentialStore = credentialStore
+        self.notificationIconCache = MiBandNotificationIconCache(defaults: defaults)
         self.nextNotificationIdentifier = MiBandNotificationProtocol
             .sessionNotificationIdentifier(at: now())
         super.init()
@@ -299,6 +301,10 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             return
         }
         let package = MiBandManeuverIconRenderer.packageName(for: maneuver)
+        let iconIsCached = maneuver != nil && notificationIconCache.contains(
+            package: package,
+            deviceIdentifier: connectedPeripheral?.identifier
+        )
         let notificationID: UInt32
         if maneuver == nil {
             notificationID = takeNextNotificationIdentifier()
@@ -313,6 +319,11 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             appendEvent(
                 "Picture mode: dùng notification ID mới \(notificationID) cho \(package)"
             )
+        }
+        if iconIsCached, let maneuver {
+            uploadedIconManeuver = maneuver
+            pictureModeDescription = "Band dùng icon đã cache; gửi realtime"
+            iconUploadDescription = "đã có trong cache của Band"
         }
         let command = MiBandNotificationProtocol.makeNotificationCommand(
             id: notificationID,
@@ -699,11 +710,17 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                   self.pendingPictureNotification?.id == attemptID,
                   self.dataUploadPhase == .idle else { return }
             self.uploadedIconManeuver = self.pendingPictureNotification?.maneuver
-            self.pictureModeDescription = "Band không mở kênh icon; giữ text dự phòng"
-            self.iconUploadDescription = "Không nhận package query sau 5 giây"
+            if let pending = self.pendingPictureNotification {
+                self.notificationIconCache.insert(
+                    package: pending.package,
+                    deviceIdentifier: self.connectedPeripheral?.identifier
+                )
+            }
+            self.pictureModeDescription = "Band dùng icon đã cache; thông báo đã gửi"
+            self.iconUploadDescription = "không cần upload lại"
             self.appendEvent(
-                "Picture mode: notification ID mới nhưng Band không hỏi package; "
-                    + "không thể xác nhận icon đã cache"
+                "Picture mode: Band không hỏi package sau 5 giây; xác nhận cache-hit "
+                    + "và ghi nhớ cho các lần gửi realtime tiếp theo"
             )
             // The primer already contains the complete instruction. Clear the
             // negotiation without sending an identical notification twice.
@@ -808,6 +825,12 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             iconUploadDescription = "Band không yêu cầu upload (status=\(request.status))"
             pictureModeDescription = "Band dùng icon đã lưu; gửi thông báo"
             uploadedIconManeuver = maneuver
+            if let package = lastIconPackageName {
+                notificationIconCache.insert(
+                    package: package,
+                    deviceIdentifier: connectedPeripheral?.identifier
+                )
+            }
             appendEvent(iconUploadDescription)
             deliverPendingPictureNotification()
             return
@@ -878,6 +901,12 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             let byteCount = pendingIconBytes?.count ?? 0
             let completedManeuver = dataUploadManeuver
             uploadedIconManeuver = completedManeuver
+            if let package = lastIconPackageName {
+                notificationIconCache.insert(
+                    package: package,
+                    deviceIdentifier: connectedPeripheral?.identifier
+                )
+            }
             appendEvent("Upload pixel icon hoàn tất: \(byteCount) byte")
             resetDataUpload(description: "hoàn tất \(byteCount) byte")
             let followUp = MiBandIconUploadFollowUp.resolve(
