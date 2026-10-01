@@ -125,6 +125,11 @@ final class NavigationCoordinator: ObservableObject {
     private func process(_ instruction: NavigationInstruction) async {
         currentInstruction = instruction
         guard notificationsActive else { return }
+        do {
+            try await bandTransport.updateLive(instruction)
+        } catch {
+            report(error, updateNavigationState: false)
+        }
         let decision = notificationPolicy.evaluate(instruction)
         firedThresholds = notificationPolicy.firedThresholds
         guard let notification = decision.notification else { return }

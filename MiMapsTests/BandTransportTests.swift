@@ -125,6 +125,55 @@ final class BandTransportTests: XCTestCase {
         XCTAssertEqual(sender.messages.count, 1)
     }
 
+    func testDirectTransportThrottlesRealtimeDistanceUpdatesWithoutPhoneNotifications() async throws {
+        let scheduler = BandSchedulerSpy()
+        let sender = DirectSenderSpy(canSend: true)
+        let transport = DirectMiBandTransport(
+            scheduler: scheduler,
+            directSender: sender,
+            liveUpdatesEnabled: { true }
+        )
+
+        try await transport.start()
+        try await transport.updateLive(instruction(
+            step: "live",
+            distance: 100,
+            timestamp: Date(timeIntervalSince1970: 1_000)
+        ))
+        try await transport.updateLive(instruction(
+            step: "live",
+            distance: 98,
+            timestamp: Date(timeIntervalSince1970: 1_003)
+        ))
+        try await transport.updateLive(instruction(
+            step: "live",
+            distance: 90,
+            timestamp: Date(timeIntervalSince1970: 1_006)
+        ))
+
+        XCTAssertEqual(sender.messages.count, 2)
+        XCTAssertTrue(scheduler.contents.isEmpty)
+        XCTAssertEqual(sender.messages.last?.title, "→ 90 m")
+    }
+
+    func testPolicyNotificationDoesNotDuplicateIdenticalRealtimeBandUpdate() async throws {
+        let scheduler = BandSchedulerSpy()
+        let sender = DirectSenderSpy(canSend: true)
+        let transport = DirectMiBandTransport(
+            scheduler: scheduler,
+            directSender: sender,
+            liveUpdatesEnabled: { true }
+        )
+        let value = instruction(step: "same", distance: 80)
+
+        try await transport.start()
+        try await transport.updateLive(value)
+        try await transport.send(value)
+
+        XCTAssertEqual(sender.messages.count, 1)
+        XCTAssertEqual(scheduler.contents.count, 1)
+    }
+
     func testDeduplicatorResetsForNewStep() {
         var deduplicator = BandInstructionDeduplicator()
         let first = instruction(step: "one", distance: 80)
@@ -177,7 +226,11 @@ private final class DirectSenderSpy: MiBandDirectNotificationSending {
     }
 }
 
-private func instruction(step: String, distance: Double) -> NavigationInstruction {
+private func instruction(
+    step: String,
+    distance: Double,
+    timestamp: Date = Date(timeIntervalSince1970: 1_000)
+) -> NavigationInstruction {
     NavigationInstruction(
         maneuver: .right,
         roadName: "Trần Phú",
@@ -185,6 +238,6 @@ private func instruction(step: String, distance: Double) -> NavigationInstructio
         remainingDistanceMeters: 1_000,
         remainingTimeSeconds: 120,
         stepIdentifier: step,
-        timestamp: Date(timeIntervalSince1970: 1_000)
+        timestamp: timestamp
     )
 }

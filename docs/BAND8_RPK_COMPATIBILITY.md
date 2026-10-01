@@ -82,7 +82,12 @@ References:
 ## Supported implementation tracks
 
 1. **Band 8 standard:** authenticated FE95 picture-mode notifications and
-   notification-icon upload; a validated `.bin` watchface may be added later.
+   notification-icon upload. MiMaps proactively refreshes the maneuver icon,
+   uploads the pixels requested by the Band, then sends the live distance and
+   street text. The optional realtime mode reuses one notification identifier
+   and refreshes its distance at a throttled cadence, avoiding a growing stack
+   of navigation cards. This is the only stock-firmware path currently known
+   to carry phone-driven navigation imagery.
 2. **Band 8 Pro / Band 9 / Band 10:** a Vela RPK can be developed and tested in
    Xiaomi AIoT-IDE, but physical installation and phone interconnect require
    Xiaomi's supported signing and Mi Fitness development channel.
@@ -90,3 +95,32 @@ References:
    the standard Band 8. Xiaomi's documented RPK interconnect path targets the
    paired mobile application and matching certificates; it is not exposed as a
    general iOS CoreBluetooth channel.
+
+## Why an interactive `.bin` watchface is not a realtime miniapp
+
+Band 8 watchface containers can include bitmaps, image lists, widgets, action
+buttons and an object named `App`. Those objects are interpreted by the fixed
+watchface engine and can bind to built-in sources such as time, steps, heart
+rate, weather and battery. The standard Band 8 format does not embed the Vela
+JavaScript/Lua runtime used by newer models, and the authenticated BLE schema
+does not expose a command for updating arbitrary watchface text or bitmaps on
+every GPS tick.
+
+A custom watchface can therefore imitate a navigation screen, but it cannot
+safely receive arbitrary live street names, distance and maneuver images from
+MiMaps on stock firmware. Replacing the firmware through SWD could add such a
+runtime, but requires opening the device and bypasses the supported OTA path;
+MiMaps deliberately does not attempt it.
+
+This conclusion also matches Gadgetbridge's current standard Band 8 installer:
+its Xiaomi firmware helper recognizes the `5A A5` watchface container and the
+Xiaomi upload service identifies type `16` as a watchface. It does not parse an
+RPK as an installable package for this model. Gadgetbridge's notification path
+does, however, implement the same package-query, icon-request and type-`50`
+pixel-upload handshake used by MiMaps picture mode.
+
+References:
+
+- [Gadgetbridge Xiaomi notification service](https://github.com/Freeyourgadget/Gadgetbridge/blob/master/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/services/XiaomiNotificationService.java)
+- [Gadgetbridge Xiaomi firmware/watchface parser](https://github.com/Freeyourgadget/Gadgetbridge/blob/master/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/devices/xiaomi/XiaomiFWHelper.java)
+- [Gadgetbridge Xiaomi data upload service](https://github.com/Freeyourgadget/Gadgetbridge/blob/master/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/services/XiaomiDataUploadService.java)

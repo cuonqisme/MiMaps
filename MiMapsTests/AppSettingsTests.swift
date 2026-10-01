@@ -15,6 +15,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(initial.mapDisplayStyle, .standard)
         XCTAssertTrue(initial.showTraffic)
         XCTAssertTrue(initial.showSpeedLimit)
+        XCTAssertFalse(initial.bandLiveUpdatesEnabled)
         XCTAssertEqual(initial.bandDisplayStyle, .routeCard)
         XCTAssertTrue(initial.recentDestinations.isEmpty)
         XCTAssertEqual(initial.routePreferences, .standard)
@@ -27,6 +28,7 @@ final class AppSettingsTests: XCTestCase {
         initial.mapDisplayStyle = .hybrid
         initial.showTraffic = false
         initial.showSpeedLimit = false
+        initial.bandLiveUpdatesEnabled = true
         initial.bandDisplayStyle = .compact
         initial.avoidTolls = true
         initial.avoidHighways = true
@@ -46,6 +48,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.mapDisplayStyle, .hybrid)
         XCTAssertFalse(reloaded.showTraffic)
         XCTAssertFalse(reloaded.showSpeedLimit)
+        XCTAssertTrue(reloaded.bandLiveUpdatesEnabled)
         XCTAssertEqual(reloaded.bandDisplayStyle, .compact)
         XCTAssertEqual(reloaded.recentDestinations.count, 8)
         XCTAssertEqual(reloaded.recentDestinations.first?.displayName, "Điểm 9")

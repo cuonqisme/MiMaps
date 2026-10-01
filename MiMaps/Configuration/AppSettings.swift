@@ -28,6 +28,7 @@ enum BandDisplayStyle: String, CaseIterable, Identifiable, Sendable {
 final class AppSettings: ObservableObject {
     private enum Key {
         static let bandNotificationsEnabled = "bandNotificationsEnabled"
+        static let bandLiveUpdatesEnabled = "bandLiveUpdatesEnabled"
         static let notificationSoundEnabled = "notificationSoundEnabled"
         static let developerModeEnabled = "developerModeEnabled"
         static let travelMode = "travelMode"
@@ -48,6 +49,10 @@ final class AppSettings: ObservableObject {
 
     @Published var bandNotificationsEnabled: Bool {
         didSet { defaults.set(bandNotificationsEnabled, forKey: Key.bandNotificationsEnabled) }
+    }
+
+    @Published var bandLiveUpdatesEnabled: Bool {
+        didSet { defaults.set(bandLiveUpdatesEnabled, forKey: Key.bandLiveUpdatesEnabled) }
     }
 
     @Published var notificationSoundEnabled: Bool {
@@ -111,6 +116,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         bandNotificationsEnabled = defaults.object(forKey: Key.bandNotificationsEnabled) as? Bool ?? true
+        bandLiveUpdatesEnabled = defaults.object(forKey: Key.bandLiveUpdatesEnabled) as? Bool ?? false
         notificationSoundEnabled = defaults.object(forKey: Key.notificationSoundEnabled) as? Bool ?? false
         developerModeEnabled = defaults.object(forKey: Key.developerModeEnabled) as? Bool ?? false
         travelMode = TravelMode(rawValue: defaults.string(forKey: Key.travelMode) ?? "") ?? .motorcycle

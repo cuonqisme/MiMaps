@@ -31,6 +31,7 @@ final class AppEnvironment: ObservableObject {
             scheduler: localNotificationService,
             directSender: miBandConnection,
             notificationsEnabled: { settings.bandNotificationsEnabled },
+            liveUpdatesEnabled: { settings.bandLiveUpdatesEnabled },
             soundEnabled: { settings.notificationSoundEnabled },
             speedLimitEnabled: { settings.showSpeedLimit },
             displayStyle: { settings.bandDisplayStyle }
@@ -39,6 +40,7 @@ final class AppEnvironment: ObservableObject {
             scheduler: localNotificationService,
             directSender: miBandConnection,
             notificationsEnabled: { settings.bandNotificationsEnabled },
+            liveUpdatesEnabled: { settings.bandLiveUpdatesEnabled },
             soundEnabled: { settings.notificationSoundEnabled },
             speedLimitEnabled: { settings.showSpeedLimit },
             displayStyle: { settings.bandDisplayStyle }

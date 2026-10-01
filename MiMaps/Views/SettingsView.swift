@@ -52,6 +52,10 @@ struct SettingsView: View {
                     LabeledContent("Kết nối Mi Band 8", value: miBandConnection.state.localizedDescription)
                 }
                 Toggle("Bật thông báo điều hướng", isOn: $settings.bandNotificationsEnabled)
+                Toggle("Cập nhật khoảng cách realtime trên Band", isOn: $settings.bandLiveUpdatesEnabled)
+                Text("Khi kết nối trực tiếp, MiMaps cập nhật cùng một thẻ điều hướng tối đa mỗi 5 giây. Một số firmware có thể rung mỗi lần cập nhật và dùng pin nhiều hơn.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Toggle("Âm thanh trên điện thoại", isOn: $settings.notificationSoundEnabled)
                 Picker("Kiểu hiển thị", selection: $settings.bandDisplayStyle) {
                     ForEach(BandDisplayStyle.allCases) { style in

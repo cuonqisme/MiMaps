@@ -6,6 +6,8 @@ Application/project rename in this release: MiMaps replaces the former product n
 
 ## 0.1.0 — in development
 
+- Added a Band 8 picture-mode recovery path for firmware that ACKs navigation notifications but does not request an application icon: MiMaps now primes the package context, attempts the device-observed 28x28/BGRA icon upload, and falls back to text with explicit diagnostics if the upload is rejected.
+- Added an opt-in direct-Bluetooth live-distance mode that updates one reusable Band navigation card at most every five seconds, without creating extra iPhone notifications.
 - Restored the firmware-accepted `com.mimaps` notification package after physical Band 8 testing showed that per-maneuver package aliases were ACKed but not rendered.
 - Distinguished a Bluetooth transport ACK from confirmed on-screen delivery in Band Lab diagnostics.
 - Added explicit on-device runtime detection: standard Band 8 uses picture mode/watchfaces and must not be sent Vela RPK packages; Band 8 Pro and Band 9/10 follow Xiaomi's separately signed RPK workflow.

@@ -149,6 +149,10 @@ struct BandConnectionView: View {
                         "Trạng thái",
                         value: connection.directNotificationState.localizedDescription
                     )
+                    LabeledContent(
+                        "Picture mode",
+                        value: connection.pictureModeDescription
+                    )
                     Button("Gửi thử picture mode: rẽ trái sau 100 m") {
                         connection.sendTestNavigationNotification()
                     }
@@ -228,7 +232,7 @@ struct BandConnectionView: View {
                         }
                     }
                     LabeledContent("Gói đã nhận", value: "\(connection.capturedPackets.count)")
-                    Text("Chế độ này lưu bản xem trước gói FE95/FDAB để chẩn đoán. MiMaps có thể ACK, giải mã phiên, gửi thông báo và upload pixel icon qua FE95/0055. Chế độ ảnh điều hướng toàn màn hình đang được triển khai riêng cho Band 8.")
+                    Text("Chế độ này lưu bản xem trước gói FE95/FDAB để chẩn đoán. MiMaps có thể ACK, giải mã phiên, gửi thông báo và upload pixel icon qua FE95/0055. Band 8 bản thường không công bố kênh ảnh toàn màn hình; picture mode sẽ ghép icon mũi tên động với khoảng cách và tên đường trong thông báo.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
