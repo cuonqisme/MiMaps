@@ -794,9 +794,16 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             writeValue(
                 MiBandSessionProtocol.chunkStartAcknowledgement,
                 to: characteristic,
-                peripheral: peripheral
+                peripheral: peripheral,
+                preferredType: .withoutResponse
             )
-            appendEvent("Band mở phản hồi nhiều phần: \(chunkCount) chunk")
+            appendEvent(
+                "Band mở phản hồi nhiều phần: \(chunkCount) chunk; "
+                    + "ACK FE95/0051 bằng writeWithoutResponse "
+                    + "(WNR max=\(peripheral.maximumWriteValueLength(for: .withoutResponse)), "
+                    + "WR max=\(peripheral.maximumWriteValueLength(for: .withResponse)))"
+            )
+            scheduleIncomingCommandChunkAcknowledgementRetries(for: attemptID)
             scheduleIncomingCommandChunkTimeout(for: attemptID)
             return
         }
@@ -817,7 +824,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             writeValue(
                 MiBandSessionProtocol.chunkEndAcknowledgement,
                 to: characteristic,
-                peripheral: peripheral
+                peripheral: peripheral,
+                preferredType: .withoutResponse
             )
             let completedCount = incomingCommandChunkCount
             resetIncomingCommandChunks()
@@ -1755,7 +1763,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
 
     private func scheduleIncomingCommandChunkTimeout(for attemptID: UUID) {
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(5))
+            try? await Task.sleep(for: .seconds(8))
             guard let self,
                   self.incomingCommandChunkAttemptID == attemptID,
                   self.incomingCommandChunkCount > 0 else { return }
@@ -1768,10 +1776,60 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         }
     }
 
-    private func writeValue(_ data: Data, to characteristic: CBCharacteristic, peripheral: CBPeripheral) {
-        let type: CBCharacteristicWriteType = characteristic.properties.contains(.write)
-            ? .withResponse
-            : .withoutResponse
+    /// Some Band 8 firmware revisions accept the chunk-start control frame
+    /// only with one of the two GATT write modes exposed by FE95/0051. Retry
+    /// the same idempotent ACK, then use FE95/0052 as a last transport-only
+    /// fallback. No application command or device state is changed here.
+    private func scheduleIncomingCommandChunkAcknowledgementRetries(for attemptID: UUID) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self,
+                  self.incomingCommandChunkAttemptID == attemptID,
+                  self.incomingCommandChunks.isEmpty,
+                  let peripheral = self.connectedPeripheral,
+                  let read = self.characteristicHandles[ProtocolCharacteristic.commandRead] else { return }
+            self.writeValue(
+                MiBandSessionProtocol.chunkStartAcknowledgement,
+                to: read,
+                peripheral: peripheral,
+                preferredType: .withResponse
+            )
+            self.appendEvent("Chưa nhận chunk; thử lại ACK FE95/0051 bằng writeWithResponse")
+
+            try? await Task.sleep(for: .milliseconds(700))
+            guard self.incomingCommandChunkAttemptID == attemptID,
+                  self.incomingCommandChunks.isEmpty,
+                  let write = self.characteristicHandles[ProtocolCharacteristic.commandWrite] else { return }
+            self.writeValue(
+                MiBandSessionProtocol.chunkStartAcknowledgement,
+                to: write,
+                peripheral: peripheral,
+                preferredType: .withoutResponse
+            )
+            self.appendEvent("Chưa nhận chunk; thử ACK điều khiển dự phòng qua FE95/0052")
+        }
+    }
+
+    private func writeValue(
+        _ data: Data,
+        to characteristic: CBCharacteristic,
+        peripheral: CBPeripheral,
+        preferredType: CBCharacteristicWriteType? = nil
+    ) {
+        let type: CBCharacteristicWriteType
+        if let preferredType,
+           preferredType == .withoutResponse,
+           characteristic.properties.contains(.writeWithoutResponse) {
+            type = .withoutResponse
+        } else if let preferredType,
+                  preferredType == .withResponse,
+                  characteristic.properties.contains(.write) {
+            type = .withResponse
+        } else {
+            type = characteristic.properties.contains(.write)
+                ? .withResponse
+                : .withoutResponse
+        }
         peripheral.writeValue(data, for: characteristic, type: type)
     }
 
