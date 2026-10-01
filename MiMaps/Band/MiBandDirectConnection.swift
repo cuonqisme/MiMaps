@@ -880,13 +880,27 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             uploadedIconManeuver = completedManeuver
             appendEvent("Upload pixel icon hoàn tất: \(byteCount) byte")
             resetDataUpload(description: "hoàn tất \(byteCount) byte")
-            pictureModeDescription = "icon đã sẵn sàng; gửi thông báo"
-            if pendingPictureNotification?.maneuver == completedManeuver {
+            let followUp = MiBandIconUploadFollowUp.resolve(
+                pendingManeuver: pendingPictureNotification?.maneuver,
+                completedManeuver: completedManeuver
+            )
+            switch followUp {
+            case .deliverPendingNotification:
+                pictureModeDescription = "icon đã sẵn sàng; gửi thông báo"
                 deliverPendingPictureNotification()
-            } else {
+            case .restartForUpdatedManeuver:
                 pictureModeAttemptID = nil
                 appendEvent("Hướng rẽ đã đổi trong lúc upload; mở picture mode cho chỉ dẫn mới nhất")
                 restartPendingPictureModeRequest()
+            case .cacheAdditionalSize:
+                // A single notification can make Band 8 request the same app
+                // icon at 28, 44 and 80 points. The first completed upload has
+                // already released the pending navigation notification. Later
+                // sizes only populate firmware caches; they are not evidence
+                // that the maneuver changed and must not restart the handshake.
+                pictureModeAttemptID = nil
+                pictureModeDescription = "đã lưu thêm icon \(byteCount) byte vào cache"
+                appendEvent("Đã hoàn tất kích thước icon phụ; không gửi lặp thông báo")
             }
             return
         }

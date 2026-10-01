@@ -1,6 +1,22 @@
 import CryptoKit
 import Foundation
 
+enum MiBandIconUploadFollowUp: Equatable, Sendable {
+    case deliverPendingNotification
+    case restartForUpdatedManeuver
+    case cacheAdditionalSize
+
+    static func resolve(
+        pendingManeuver: NavigationManeuver?,
+        completedManeuver: NavigationManeuver?
+    ) -> Self {
+        guard let pendingManeuver else { return .cacheAdditionalSize }
+        return pendingManeuver == completedManeuver
+            ? .deliverPendingNotification
+            : .restartForUpdatedManeuver
+    }
+}
+
 struct MiBandDataUploadAcknowledgement: Equatable, Sendable {
     let status: UInt64
     let resumePosition: UInt64

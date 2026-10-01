@@ -11,9 +11,12 @@ An ACK from FE95 only confirms receipt of the encrypted protocol frame. It does
 not prove that the firmware rendered a notification. MiMaps therefore labels
 this state as `Band đã ACK gói` and reports icon query/upload separately.
 
-For the standard Band 8, MiMaps uses the same class of mechanism documented by
-Notify as **picture mode**: a normal Band notification plus a dynamically
-uploaded notification icon. MiMaps uses short, revisioned keys under the
+For the standard Band 8, MiMaps currently uses a normal Band notification plus
+a dynamically uploaded notification icon. Physical testing on the paired Band
+8 confirms that type-`50` uploads succeed at the firmware-requested 28, 44 and
+80 pixel sizes. The firmware still renders those pixels only in the small app
+icon slot of its fixed notification layout; an 80-pixel upload does not create
+a full-screen navigation card. MiMaps uses short, revisioned keys under the
 `com.mimaps` namespace so a stale or interrupted icon-cache entry cannot block
 the firmware from requesting new pixels. The required order is notification,
 Band package query, phone package reply, Band icon request, and type-`50`
@@ -83,15 +86,18 @@ References:
 
 ## Supported implementation tracks
 
-1. **Band 8 standard:** authenticated FE95 picture-mode notifications and
+1. **Band 8 standard:** authenticated FE95 notifications and
    notification-icon upload. MiMaps proactively refreshes the maneuver icon,
    uploads the pixels requested by the Band, then sends the live distance and
    street text. The optional realtime mode reuses one notification identifier
    and refreshes its distance at most every two seconds, avoiding a growing
    stack of navigation cards. The pixel channel uses 244-byte
    `writeWithoutResponse` frames with CoreBluetooth backpressure and selective
-   retransmission when the Band reports missing frames. This is the only
-   stock-firmware path currently known to carry phone-driven navigation imagery.
+   retransmission when the Band reports missing frames. This path is realtime,
+   but the firmware confines the pixels to the notification's app-icon slot.
+   Notify's public Band 8 documentation also advertises picture mode and screen
+   mirroring; reproducing its full-screen result requires a separate temporary
+   watchface/image workflow, not a larger type-`50` notification icon.
 2. **Band 8 Pro / Band 9 / Band 10:** a Vela RPK can be developed and tested in
    Xiaomi AIoT-IDE, but physical installation and phone interconnect require
    Xiaomi's supported signing and Mi Fitness development channel.
@@ -112,9 +118,16 @@ every GPS tick.
 
 A custom watchface can therefore imitate a navigation screen, but it cannot
 safely receive arbitrary live street names, distance and maneuver images from
-MiMaps on stock firmware. Replacing the firmware through SWD could add such a
-runtime, but requires opening the device and bypasses the supported OTA path;
-MiMaps deliberately does not attempt it.
+MiMaps through the notification command on stock firmware. A phone can instead
+render a complete 192×490 card and repeatedly install it as a temporary
+watchface (upload type `16`), which is the leading explanation for Notify's
+Band 8 picture/screen-mirroring mode. This is technically different from a
+miniapp and must be treated as experimental: a complete face is much larger
+than an icon, refreshes are slower, and aggressive updates may cost battery and
+flash lifetime. MiMaps will only enable that path after it can build a valid
+Band 8 `.bin`, verify its product metadata, and preserve/restore the user's
+active watchface. Replacing the firmware through SWD could add a runtime, but
+requires opening the device; MiMaps deliberately does not attempt it.
 
 This conclusion also matches Gadgetbridge's current standard Band 8 installer:
 its Xiaomi firmware helper recognizes the `5A A5` watchface container and the

@@ -2,6 +2,30 @@ import XCTest
 @testable import MiMaps
 
 final class MiBandDataUploadProtocolTests: XCTestCase {
+    func testIconUploadFollowUpDoesNotRestartForAdditionalFirmwareSizes() {
+        XCTAssertEqual(
+            MiBandIconUploadFollowUp.resolve(
+                pendingManeuver: nil,
+                completedManeuver: .left
+            ),
+            .cacheAdditionalSize
+        )
+        XCTAssertEqual(
+            MiBandIconUploadFollowUp.resolve(
+                pendingManeuver: .left,
+                completedManeuver: .left
+            ),
+            .deliverPendingNotification
+        )
+        XCTAssertEqual(
+            MiBandIconUploadFollowUp.resolve(
+                pendingManeuver: .right,
+                completedManeuver: .left
+            ),
+            .restartForUpdatedManeuver
+        )
+    }
+
     func testBuildsNotificationIconUploadRequest() {
         let bytes = Data([1, 2, 3])
         let command = MiBandDataUploadProtocol.makeUploadRequest(

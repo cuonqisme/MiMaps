@@ -179,7 +179,7 @@ struct BandConnectionView: View {
                                 .accessibilityLabel("Bản xem trước thẻ điều hướng Mi Band 8")
                             Spacer()
                         }
-                        Text("Ảnh 192×490 này chỉ là bản thiết kế trong MiMaps. Firmware Band 8 bản thường đang yêu cầu icon 28×28; MiMaps gửi mũi tên qua kênh icon rồi để giao diện thông báo của Band ghép với khoảng cách và tên đường.")
+                        Text("Ảnh 192×490 này là thiết kế mục tiêu toàn màn hình. Kết quả thử thực tế xác nhận upload icon 28/44/80 px thành công, nhưng firmware chỉ đặt ảnh đó vào ô icon nhỏ của thông báo. Không thể phóng ô này bằng dữ liệu type 50; chế độ toàn màn hình cần một mặt đồng hồ tạm thời type 16 riêng.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -217,7 +217,7 @@ struct BandConnectionView: View {
                         "Upload icon mũi tên",
                         value: connection.iconUploadDescription
                     )
-                    Text("Lệnh được mã hóa và gửi thẳng từ MiMaps qua Bluetooth; Mi Fitness không tham gia. ACK chỉ xác nhận Band nhận khung giao thức, không xác nhận giao diện đã được hiển thị. Hãy kiểm tra thêm yêu cầu icon và trạng thái upload.")
+                    Text("Lệnh được mã hóa và gửi thẳng từ MiMaps qua Bluetooth; Mi Fitness không tham gia. Upload icon thành công chỉ thay icon ứng dụng trong bố cục thông báo cố định của Band, không biến thông báo thành ảnh toàn màn hình.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -235,7 +235,7 @@ struct BandConnectionView: View {
                         }
                     }
                     LabeledContent("Gói đã nhận", value: "\(connection.capturedPackets.count)")
-                    Text("Chế độ này lưu bản xem trước gói FE95/FDAB để chẩn đoán. MiMaps có thể ACK, giải mã phiên, gửi thông báo và upload pixel icon qua FE95/0055. Band 8 bản thường không công bố kênh ảnh toàn màn hình; picture mode sẽ ghép icon mũi tên động với khoảng cách và tên đường trong thông báo.")
+                    Text("Chế độ này lưu bản xem trước gói FE95/FDAB để chẩn đoán. MiMaps có thể ACK, giải mã phiên, gửi thông báo và upload pixel icon qua FE95/0055. Ảnh toàn màn hình không thuộc kênh icon thông báo; nhánh thử nghiệm phải đóng gói ảnh thành mặt đồng hồ Band 8 và upload qua type 16.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

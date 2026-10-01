@@ -39,7 +39,7 @@ Never commit Apple signing material. Native MapKit does not require a third-part
 
 Setup guides: [Windows development](WINDOWS_DEVELOPMENT.md), [Apple signing](APPLE_SIGNING.md), [GitHub Actions](GITHUB_ACTIONS_SETUP.md), [IPA build](IPA_BUILD.md), [TestFlight](TESTFLIGHT.md), [testing](TESTING.md), [hardware testing](HARDWARE_TESTING.md), [privacy](PRIVACY.md), and [security](SECURITY.md).
 
-Latest automated status and physical-verification boundaries are recorded in [RELEASE_REPORT.md](RELEASE_REPORT.md).
+Latest automated status and physical-verification boundaries are recorded in [RELEASE_REPORT.md](RELEASE_REPORT.md). The verified Band 8 icon boundary and the safe full-screen watchface track are documented in [Band 8 full-screen navigation](docs/BAND8_FULLSCREEN_NAVIGATION.md).
 
 ## Supported toolchain
 
