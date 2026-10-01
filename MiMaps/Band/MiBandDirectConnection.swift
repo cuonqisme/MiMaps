@@ -72,6 +72,9 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var lastFullscreenUpdateTimestamp: Date?
     private var fullscreenRiskAcknowledgedForSession = false
     private var restoreRequestedAfterTransfer = false
+    private var incomingCommandChunkCount = 0
+    private var incomingCommandChunks: [Int: Data] = [:]
+    private var incomingCommandChunkAttemptID: UUID?
     private let watchfaceRealtimePolicy = MiBandWatchfaceRealtimePolicy()
     private let defaults: UserDefaults
     private let now: () -> Date
@@ -337,8 +340,22 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             )
             return
         }
+        firmwareVersion = nil
+        batteryLevel = nil
         requestDeviceInformation()
         watchfaceInstallationState = .awaitingDeviceInfo
+        enqueueCommand(
+            MiBandSystemProtocol.makeDeviceInfoCommand(),
+            label: "đọc firmware Xiaomi"
+        )
+        enqueueCommand(
+            MiBandSystemProtocol.makeBasicDeviceStateCommand(),
+            label: "đọc trạng thái pin Xiaomi"
+        )
+        enqueueCommand(
+            MiBandSystemProtocol.makeBatteryCommand(),
+            label: "đọc pin Xiaomi dự phòng"
+        )
         enqueueCommand(
             MiBandWatchfaceProtocol.makeListCommand(),
             label: "đọc danh sách mặt đồng hồ"
@@ -765,6 +782,62 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         }
 
         if characteristicKey == ProtocolCharacteristic.commandRead,
+           let chunkCount = MiBandSessionProtocol.encryptedChunkCount(from: data) {
+            guard authenticationState == .authenticated else {
+                appendEvent("Bỏ qua phản hồi nhiều phần trước khi xác thực hoàn tất")
+                return
+            }
+            incomingCommandChunkCount = chunkCount
+            incomingCommandChunks.removeAll(keepingCapacity: true)
+            let attemptID = UUID()
+            incomingCommandChunkAttemptID = attemptID
+            writeValue(
+                MiBandSessionProtocol.chunkStartAcknowledgement,
+                to: characteristic,
+                peripheral: peripheral
+            )
+            appendEvent("Band mở phản hồi nhiều phần: \(chunkCount) chunk")
+            scheduleIncomingCommandChunkTimeout(for: attemptID)
+            return
+        }
+
+        if characteristicKey == ProtocolCharacteristic.commandRead,
+           incomingCommandChunkCount > 0,
+           let chunk = MiBandSessionProtocol.commandChunk(from: data) {
+            guard chunk.index <= incomingCommandChunkCount else {
+                appendEvent("Bỏ qua chunk \(chunk.index) vượt quá \(incomingCommandChunkCount)")
+                return
+            }
+            incomingCommandChunks[chunk.index] = chunk.bytes
+            guard incomingCommandChunks.count == incomingCommandChunkCount else { return }
+
+            let encrypted = (1...incomingCommandChunkCount).reduce(into: Data()) { result, index in
+                if let bytes = incomingCommandChunks[index] { result.append(bytes) }
+            }
+            writeValue(
+                MiBandSessionProtocol.chunkEndAcknowledgement,
+                to: characteristic,
+                peripheral: peripheral
+            )
+            let completedCount = incomingCommandChunkCount
+            resetIncomingCommandChunks()
+            do {
+                guard let keys = authenticationContext?.sessionKeys else {
+                    throw MiBandSessionProtocolError.invalidSessionKeys
+                }
+                let command = try MiBandSessionProtocol.decryptIncomingChunkedPayload(
+                    encrypted,
+                    sessionKeys: keys
+                )
+                appendEvent("Đã ghép và giải mã đủ \(completedCount) chunk")
+                try processDecryptedSessionCommand(command)
+            } catch {
+                handleSessionCommandError(error)
+            }
+            return
+        }
+
+        if characteristicKey == ProtocolCharacteristic.commandRead,
            MiBandSessionProtocol.isEncryptedSingleFrame(data) {
             writeValue(
                 MiBandSessionProtocol.acknowledgement,
@@ -851,59 +924,80 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                 data,
                 sessionKeys: sessionKeys
             )
-            decryptedPacketCount += 1
-            let envelope = MiBandSessionProtocol.commandEnvelope(from: command)
-            let type = envelope.type.map { String($0) } ?? "?"
-            let subtype = envelope.subtype.map { String($0) } ?? "?"
-            lastDecryptedCommandPreview = MiBandCapturedPacket.preview(command, limit: 96)
-            appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
-
-            if let list = try MiBandWatchfaceProtocol.watchfaceList(from: command) {
-                handleWatchfaceList(list)
-            } else if let status = try MiBandWatchfaceProtocol.installStatus(from: command) {
-                try handleWatchfaceInstallStatus(status)
-            } else if let acknowledgement = try MiBandWatchfaceProtocol.setAcknowledgement(from: command) {
-                handleWatchfaceSetAcknowledgement(acknowledgement)
-            } else if let acknowledgement = try MiBandWatchfaceProtocol.deleteAcknowledgement(from: command) {
-                appendEvent("Band ACK xóa mặt đồng hồ: \(acknowledgement)")
-            } else if let package = try MiBandNotificationIconProtocol.packageQuery(from: command) {
-                guard package.hasPrefix("com.mimaps") else {
-                    appendEvent("Bỏ qua yêu cầu icon không thuộc MiMaps: \(package)")
-                    return
-                }
-                lastIconPackageName = package
-                lastIconRequestDescription = "query package=\(package)"
-                pictureModeDescription = "Band đã hỏi package; trả lời icon"
-                appendEvent("Band hỏi icon cho package \(package); gửi phản hồi theo giao thức")
-                enqueueCommand(
-                    MiBandNotificationIconProtocol.makePackageReply(package: package),
-                    label: "phản hồi icon \(package)"
-                )
-            } else if let request = try MiBandNotificationIconProtocol.iconRequest(from: command) {
-                let requestedManeuver: NavigationManeuver?
-                if lastIconPackageName == pendingPictureNotification?.package {
-                    requestedManeuver = pendingPictureNotification?.maneuver
-                } else {
-                    requestedManeuver = lastIconPackageName.flatMap {
-                        MiBandManeuverIconRenderer.maneuver(forPackageName: $0)
-                    } ?? lastNavigationManeuver
-                }
-                let maneuver = requestedManeuver.map { String(describing: $0) } ?? "unknown"
-                lastIconRequestDescription = "status=\(request.status), format=\(request.pixelFormat), size=\(request.size), maneuver=\(maneuver)"
-                pictureModeDescription = "Band đã yêu cầu icon; đang upload"
-                appendEvent("Band yêu cầu dữ liệu icon: \(lastIconRequestDescription ?? "—")")
-                try beginIconUpload(request: request, maneuver: requestedManeuver)
-            } else if let acknowledgement = try MiBandDataUploadProtocol.acknowledgement(from: command) {
-                try handleDataUploadAcknowledgement(acknowledgement)
-            }
+            try processDecryptedSessionCommand(command)
         } catch {
-            directNotificationState = .failed(error.localizedDescription)
-            if isWatchfaceTransitionInProgress {
-                watchfaceInstallationState = .failed(error.localizedDescription)
-                watchfaceUploadDescription = "lỗi giao thức: \(error.localizedDescription)"
-            }
-            appendEvent("Đã ACK nhưng không giải mã được gói phiên: \(error.localizedDescription)")
+            handleSessionCommandError(error)
         }
+    }
+
+    private func processDecryptedSessionCommand(_ command: Data) throws {
+        decryptedPacketCount += 1
+        let envelope = MiBandSessionProtocol.commandEnvelope(from: command)
+        let type = envelope.type.map { String($0) } ?? "?"
+        let subtype = envelope.subtype.map { String($0) } ?? "?"
+        lastDecryptedCommandPreview = MiBandCapturedPacket.preview(command, limit: 96)
+        appendEvent("Đã ACK và giải mã gói phiên #\(decryptedPacketCount): type=\(type), subtype=\(subtype)")
+
+        if let deviceInfo = try MiBandSystemProtocol.deviceInformation(from: command) {
+            firmwareVersion = deviceInfo.firmware
+            appendEvent(
+                "Firmware Xiaomi: \(deviceInfo.firmware)"
+                    + (deviceInfo.model.map { ", model=\($0)" } ?? "")
+            )
+        } else if let level = try MiBandSystemProtocol.batteryLevel(from: command) {
+            if level > 0 {
+                batteryLevel = level
+                appendEvent("Pin Xiaomi: \(level)%")
+            } else {
+                appendEvent("Bỏ qua mức pin Xiaomi 0% không hợp lệ khi Band vẫn kết nối")
+            }
+        } else if let list = try MiBandWatchfaceProtocol.watchfaceList(from: command) {
+            handleWatchfaceList(list)
+        } else if let status = try MiBandWatchfaceProtocol.installStatus(from: command) {
+            try handleWatchfaceInstallStatus(status)
+        } else if let acknowledgement = try MiBandWatchfaceProtocol.setAcknowledgement(from: command) {
+            handleWatchfaceSetAcknowledgement(acknowledgement)
+        } else if let acknowledgement = try MiBandWatchfaceProtocol.deleteAcknowledgement(from: command) {
+            appendEvent("Band ACK xóa mặt đồng hồ: \(acknowledgement)")
+        } else if let package = try MiBandNotificationIconProtocol.packageQuery(from: command) {
+            guard package.hasPrefix("com.mimaps") else {
+                appendEvent("Bỏ qua yêu cầu icon không thuộc MiMaps: \(package)")
+                return
+            }
+            lastIconPackageName = package
+            lastIconRequestDescription = "query package=\(package)"
+            pictureModeDescription = "Band đã hỏi package; trả lời icon"
+            appendEvent("Band hỏi icon cho package \(package); gửi phản hồi theo giao thức")
+            enqueueCommand(
+                MiBandNotificationIconProtocol.makePackageReply(package: package),
+                label: "phản hồi icon \(package)"
+            )
+        } else if let request = try MiBandNotificationIconProtocol.iconRequest(from: command) {
+            let requestedManeuver: NavigationManeuver?
+            if lastIconPackageName == pendingPictureNotification?.package {
+                requestedManeuver = pendingPictureNotification?.maneuver
+            } else {
+                requestedManeuver = lastIconPackageName.flatMap {
+                    MiBandManeuverIconRenderer.maneuver(forPackageName: $0)
+                } ?? lastNavigationManeuver
+            }
+            let maneuver = requestedManeuver.map { String(describing: $0) } ?? "unknown"
+            lastIconRequestDescription = "status=\(request.status), format=\(request.pixelFormat), size=\(request.size), maneuver=\(maneuver)"
+            pictureModeDescription = "Band đã yêu cầu icon; đang upload"
+            appendEvent("Band yêu cầu dữ liệu icon: \(lastIconRequestDescription ?? "—")")
+            try beginIconUpload(request: request, maneuver: requestedManeuver)
+        } else if let acknowledgement = try MiBandDataUploadProtocol.acknowledgement(from: command) {
+            try handleDataUploadAcknowledgement(acknowledgement)
+        }
+    }
+
+    private func handleSessionCommandError(_ error: Error) {
+        directNotificationState = .failed(error.localizedDescription)
+        if isWatchfaceTransitionInProgress {
+            watchfaceInstallationState = .failed(error.localizedDescription)
+            watchfaceUploadDescription = "lỗi giao thức: \(error.localizedDescription)"
+        }
+        appendEvent("Đã ACK nhưng không xử lý được gói phiên: \(error.localizedDescription)")
     }
 
     private func handleWatchfaceList(_ list: [MiBandWatchfaceProtocol.WatchfaceInfo]) {
@@ -1647,9 +1741,31 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         activeMiMapsWatchfaceIdentifier = nil
         fullscreenRiskAcknowledgedForSession = false
         restoreRequestedAfterTransfer = false
+        resetIncomingCommandChunks()
         fullscreenNavigationEnabled = false
         watchfaceInstallationState = .unavailable
         watchfaceUploadDescription = "chưa bắt đầu"
+    }
+
+    private func resetIncomingCommandChunks() {
+        incomingCommandChunkCount = 0
+        incomingCommandChunks.removeAll()
+        incomingCommandChunkAttemptID = nil
+    }
+
+    private func scheduleIncomingCommandChunkTimeout(for attemptID: UUID) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self,
+                  self.incomingCommandChunkAttemptID == attemptID,
+                  self.incomingCommandChunkCount > 0 else { return }
+            let received = self.incomingCommandChunks.count
+            let expected = self.incomingCommandChunkCount
+            self.resetIncomingCommandChunks()
+            self.appendEvent(
+                "Hết thời gian nhận phản hồi nhiều phần: đã nhận \(received)/\(expected) chunk"
+            )
+        }
     }
 
     private func writeValue(_ data: Data, to characteristic: CBCharacteristic, peripheral: CBPeripheral) {
@@ -1944,14 +2060,27 @@ extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
                 characteristic: characteristic.uuid
             )
             if key == "180A/2A26" {
-                firmwareVersion = String(data: data, encoding: .utf8)?
+                let candidate = String(data: data, encoding: .utf8)?
                     .trimmingCharacters(in: .controlCharacters.union(.whitespacesAndNewlines))
-                appendEvent("Firmware Band: \(firmwareVersion ?? "không đọc được")")
+                if let candidate,
+                   candidate.rangeOfCharacter(from: .decimalDigits) != nil,
+                   !candidate.localizedCaseInsensitiveContains("cordio") {
+                    firmwareVersion = candidate
+                    appendEvent("Firmware GATT dự phòng: \(candidate)")
+                } else {
+                    appendEvent(
+                        "Bỏ qua firmware GATT không phải firmware Xiaomi: \(candidate ?? "không đọc được")"
+                    )
+                }
                 return
             }
             if key == "180F/2A19", let level = data.first {
-                batteryLevel = Int(level)
-                appendEvent("Pin Band: \(level)%")
+                if (1...100).contains(level) {
+                    batteryLevel = Int(level)
+                    appendEvent("Pin GATT dự phòng: \(level)%")
+                } else {
+                    appendEvent("Bỏ qua mức pin GATT placeholder: \(level)%")
+                }
                 return
             }
         }

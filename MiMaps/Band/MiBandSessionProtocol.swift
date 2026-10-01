@@ -29,8 +29,15 @@ struct MiBandCommandEnvelope: Equatable, Sendable {
     let subtype: UInt64?
 }
 
+struct MiBandCommandChunk: Equatable, Sendable {
+    let index: Int
+    let bytes: Data
+}
+
 enum MiBandSessionProtocol {
     static let acknowledgement = Data([0x00, 0x00, 0x03, 0x00])
+    static let chunkStartAcknowledgement = Data([0x00, 0x00, 0x01, 0x01])
+    static let chunkEndAcknowledgement = Data([0x00, 0x00, 0x01, 0x00])
 
     static func isEncryptedSingleFrame(_ frame: Data) -> Bool {
         guard frame.count >= 8 else { return false }
@@ -43,6 +50,20 @@ enum MiBandSessionProtocol {
         return frame.last
     }
 
+    static func encryptedChunkCount(from frame: Data) -> Int? {
+        guard frame.count == 6,
+              frame.starts(with: [0x00, 0x00, 0x00, 0x01]) else { return nil }
+        let count = Int(frame[4]) | (Int(frame[5]) << 8)
+        return count > 0 ? count : nil
+    }
+
+    static func commandChunk(from frame: Data) -> MiBandCommandChunk? {
+        guard frame.count > 2 else { return nil }
+        let index = Int(frame[0]) | (Int(frame[1]) << 8)
+        guard index > 0 else { return nil }
+        return MiBandCommandChunk(index: index, bytes: Data(frame.dropFirst(2)))
+    }
+
     static func decryptIncomingSingleFrame(
         _ frame: Data,
         sessionKeys: MiBandSessionKeys
@@ -52,6 +73,18 @@ enum MiBandSessionProtocol {
         }
         return try decryptCCM(
             Data(frame.dropFirst(4)),
+            key: sessionKeys.decryptionKey,
+            noncePrefix: sessionKeys.decryptionNonce,
+            counter: 0
+        )
+    }
+
+    static func decryptIncomingChunkedPayload(
+        _ encryptedPayload: Data,
+        sessionKeys: MiBandSessionKeys
+    ) throws -> Data {
+        try decryptCCM(
+            encryptedPayload,
             key: sessionKeys.decryptionKey,
             noncePrefix: sessionKeys.decryptionNonce,
             counter: 0
