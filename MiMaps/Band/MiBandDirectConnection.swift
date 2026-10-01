@@ -48,7 +48,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
     private var dataUploadParts: [Data] = []
     private var nextDataUploadPartIndex = 0
     private var auxiliaryFrames: [Data] = []
-    private var nextAuxiliaryFrameIndex = 0
+    private var pendingAuxiliaryFrameIndexes: [Int] = []
+    private var pendingDataUploadControlFrame: Data?
     private var dataUploadAttemptID: UUID?
     private var dataUploadPhase: DataUploadPhase = .idle
     private let defaults: UserDefaults
@@ -89,6 +90,13 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         static let commandRead = "FE95/0051"
         static let commandWrite = "FE95/0052"
         static let dataUpload = "FE95/0055"
+    }
+
+    private enum DataUploadTransport {
+        // The Band 8 channel follows Xiaomi's 244-byte BLE frame limit. A
+        // larger CoreBluetooth write-with-response becomes an ATT long write,
+        // which FE95/0055 rejects with "The attribute is not long".
+        static let maximumFrameLength = 244
     }
 
     private enum DataUploadPhase: String {
@@ -866,10 +874,11 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                 dataUploadParts[nextDataUploadPartIndex],
                 sessionKeys: sessionKeys
             )
-            let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write)
-                ? .withResponse
-                : .withoutResponse
-            let maximumLength = peripheral.maximumWriteValueLength(for: writeType)
+            let writeType = dataUploadWriteType(for: characteristic)
+            let maximumLength = min(
+                peripheral.maximumWriteValueLength(for: writeType),
+                DataUploadTransport.maximumFrameLength
+            )
             guard maximumLength > 8 else {
                 failDataUpload("MTU của FE95/0055 quá nhỏ.")
                 return
@@ -878,8 +887,13 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             if encrypted.count + 6 <= maximumLength {
                 var frame = Data([0, 0, 2, 1, 0, 0])
                 frame.append(encrypted)
-                dataUploadPhase = .writingSingleFrame
-                writeValue(frame, to: characteristic, peripheral: peripheral)
+                writeDataUploadControlFrame(
+                    frame,
+                    writingPhase: .writingSingleFrame,
+                    waitingPhase: .waitingSingleAcknowledgement,
+                    characteristic: characteristic,
+                    peripheral: peripheral
+                )
             } else {
                 let payloadSize = maximumLength - 2
                 auxiliaryFrames = stride(from: 0, to: encrypted.count, by: payloadSize)
@@ -890,30 +904,93 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
                         frame.append(encrypted[start..<min(start + payloadSize, encrypted.count)])
                         return frame
                     }
-                nextAuxiliaryFrameIndex = 0
+                pendingAuxiliaryFrameIndexes = Array(auxiliaryFrames.indices)
                 var start = Data([0, 0, 0, 1])
                 start.appendLittleEndian(UInt16(auxiliaryFrames.count))
-                dataUploadPhase = .writingChunkStart
-                writeValue(start, to: characteristic, peripheral: peripheral)
+                writeDataUploadControlFrame(
+                    start,
+                    writingPhase: .writingChunkStart,
+                    waitingPhase: .waitingChunkStartAcknowledgement,
+                    characteristic: characteristic,
+                    peripheral: peripheral
+                )
             }
-            iconUploadDescription = "đang gửi phần \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count)"
+            let mode = writeType == .withoutResponse ? "WNR" : "WR"
+            iconUploadDescription = "đang gửi phần \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count), MTU=\(maximumLength), \(mode)"
+            appendEvent("FE95/0055 dùng \(mode), khung tối đa \(maximumLength) byte")
             scheduleDataUploadTimeout()
         } catch {
             failDataUpload(error.localizedDescription)
         }
     }
 
-    private func sendNextAuxiliaryFrame() {
-        guard nextAuxiliaryFrameIndex < auxiliaryFrames.count,
-              let peripheral = connectedPeripheral,
-              let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload] else {
-            dataUploadPhase = .waitingChunkEndAcknowledgement
+    private func dataUploadWriteType(for characteristic: CBCharacteristic) -> CBCharacteristicWriteType {
+        characteristic.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
+    }
+
+    private func writeDataUploadControlFrame(
+        _ frame: Data,
+        writingPhase: DataUploadPhase,
+        waitingPhase: DataUploadPhase,
+        characteristic: CBCharacteristic,
+        peripheral: CBPeripheral
+    ) {
+        let writeType = dataUploadWriteType(for: characteristic)
+        dataUploadPhase = writingPhase
+        if writeType == .withoutResponse, !peripheral.canSendWriteWithoutResponse {
+            pendingDataUploadControlFrame = frame
             return
         }
-        let frame = auxiliaryFrames[nextAuxiliaryFrameIndex]
-        nextAuxiliaryFrameIndex += 1
+        peripheral.writeValue(frame, for: characteristic, type: writeType)
+        if writeType == .withoutResponse {
+            dataUploadPhase = waitingPhase
+        }
+    }
+
+    private func resumeDataUploadWithoutResponse(on peripheral: CBPeripheral) {
+        guard let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload],
+              dataUploadWriteType(for: characteristic) == .withoutResponse else { return }
+
+        if let frame = pendingDataUploadControlFrame,
+           peripheral.canSendWriteWithoutResponse {
+            pendingDataUploadControlFrame = nil
+            peripheral.writeValue(frame, for: characteristic, type: .withoutResponse)
+            switch dataUploadPhase {
+            case .writingSingleFrame:
+                dataUploadPhase = .waitingSingleAcknowledgement
+            case .writingChunkStart:
+                dataUploadPhase = .waitingChunkStartAcknowledgement
+            default:
+                break
+            }
+        }
+
+        if dataUploadPhase == .writingChunks {
+            sendAvailableAuxiliaryFrames()
+        }
+    }
+
+    private func sendAvailableAuxiliaryFrames() {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristicHandles[ProtocolCharacteristic.dataUpload] else {
+            failDataUpload("Kênh FE95/0055 không còn sẵn sàng.")
+            return
+        }
+
+        let writeType = dataUploadWriteType(for: characteristic)
         dataUploadPhase = .writingChunks
-        writeValue(frame, to: characteristic, peripheral: peripheral)
+        while let frameIndex = pendingAuxiliaryFrameIndexes.first {
+            if writeType == .withoutResponse, !peripheral.canSendWriteWithoutResponse {
+                return
+            }
+            pendingAuxiliaryFrameIndexes.removeFirst()
+            peripheral.writeValue(auxiliaryFrames[frameIndex], for: characteristic, type: writeType)
+            if writeType == .withResponse {
+                return
+            }
+        }
+        dataUploadPhase = .waitingChunkEndAcknowledgement
+        appendEvent("Đã xếp đủ \(auxiliaryFrames.count) frame icon vào hàng đợi Bluetooth")
     }
 
     private func handleDataUploadChannelPacket(_ data: Data) {
@@ -921,13 +998,28 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
             guard dataUploadPhase == .waitingChunkStartAcknowledgement
                     || dataUploadPhase == .writingChunkStart else { return }
             appendEvent("Band ACK bắt đầu khối icon")
-            sendNextAuxiliaryFrame()
+            sendAvailableAuxiliaryFrames()
             return
         }
         if data == Data([0, 0, 1, 0]) {
             guard dataUploadPhase == .waitingChunkEndAcknowledgement
                     || dataUploadPhase == .writingChunks else { return }
             completeCurrentDataUploadPart()
+            return
+        }
+        if let requestedIndexes = MiBandDataUploadProtocol.missingChunkIndexes(from: data) {
+            guard dataUploadPhase == .waitingChunkEndAcknowledgement
+                    || dataUploadPhase == .writingChunks else { return }
+            let validIndexes = requestedIndexes
+                .map { $0 - 1 }
+                .filter { auxiliaryFrames.indices.contains($0) }
+            guard !validIndexes.isEmpty else {
+                failDataUpload("Band yêu cầu lại frame không hợp lệ: \(requestedIndexes).")
+                return
+            }
+            pendingAuxiliaryFrameIndexes = validIndexes
+            appendEvent("Band yêu cầu gửi lại frame icon: \(requestedIndexes.map(String.init).joined(separator: ", "))")
+            sendAvailableAuxiliaryFrames()
             return
         }
         if data.count == 4, data.starts(with: [0, 0, 3]) {
@@ -949,7 +1041,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         appendEvent("Band nhận phần icon \(nextDataUploadPartIndex + 1)/\(dataUploadParts.count)")
         nextDataUploadPartIndex += 1
         auxiliaryFrames = []
-        nextAuxiliaryFrameIndex = 0
+        pendingAuxiliaryFrameIndexes = []
+        pendingDataUploadControlFrame = nil
         sendNextDataUploadPart()
     }
 
@@ -960,11 +1053,7 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         case .writingChunkStart:
             dataUploadPhase = .waitingChunkStartAcknowledgement
         case .writingChunks:
-            if nextAuxiliaryFrameIndex < auxiliaryFrames.count {
-                sendNextAuxiliaryFrame()
-            } else {
-                dataUploadPhase = .waitingChunkEndAcknowledgement
-            }
+            sendAvailableAuxiliaryFrames()
         default:
             break
         }
@@ -993,7 +1082,8 @@ final class MiBandDirectConnection: NSObject, ObservableObject {
         dataUploadParts = []
         nextDataUploadPartIndex = 0
         auxiliaryFrames = []
-        nextAuxiliaryFrameIndex = 0
+        pendingAuxiliaryFrameIndexes = []
+        pendingDataUploadControlFrame = nil
         dataUploadAttemptID = nil
         dataUploadPhase = .idle
         dataUploadManeuver = nil
@@ -1183,6 +1273,10 @@ extension MiBandDirectConnection: @preconcurrency CBCentralManagerDelegate {
 }
 
 extension MiBandDirectConnection: @preconcurrency CBPeripheralDelegate {
+    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
+        resumeDataUploadWithoutResponse(on: peripheral)
+    }
+
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error {
             state = .failed(error.localizedDescription)

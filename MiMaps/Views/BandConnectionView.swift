@@ -156,7 +156,7 @@ struct BandConnectionView: View {
                     Button("Gửi thử picture mode: rẽ trái sau 100 m") {
                         connection.sendTestNavigationNotification()
                     }
-                    Button("Xem thẻ điều hướng Band 8") {
+                    Button("Xem bản thiết kế toàn màn hình (mô phỏng)") {
                         navigationCardPreview = MiBandNavigationCardRenderer.render(
                             NavigationInstruction(
                                 maneuver: .roundaboutExit(3),
@@ -179,6 +179,9 @@ struct BandConnectionView: View {
                                 .accessibilityLabel("Bản xem trước thẻ điều hướng Mi Band 8")
                             Spacer()
                         }
+                        Text("Ảnh 192×490 này chỉ là bản thiết kế trong MiMaps. Firmware Band 8 bản thường đang yêu cầu icon 28×28; MiMaps gửi mũi tên qua kênh icon rồi để giao diện thông báo của Band ghép với khoảng cách và tên đường.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
                     if connection.decryptedPacketCount > 0 || connection.sentCommandCount > 0 {
                         LabeledContent(

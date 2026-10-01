@@ -85,9 +85,11 @@ References:
    notification-icon upload. MiMaps proactively refreshes the maneuver icon,
    uploads the pixels requested by the Band, then sends the live distance and
    street text. The optional realtime mode reuses one notification identifier
-   and refreshes its distance at a throttled cadence, avoiding a growing stack
-   of navigation cards. This is the only stock-firmware path currently known
-   to carry phone-driven navigation imagery.
+   and refreshes its distance at most every two seconds, avoiding a growing
+   stack of navigation cards. The pixel channel uses 244-byte
+   `writeWithoutResponse` frames with CoreBluetooth backpressure and selective
+   retransmission when the Band reports missing frames. This is the only
+   stock-firmware path currently known to carry phone-driven navigation imagery.
 2. **Band 8 Pro / Band 9 / Band 10:** a Vela RPK can be developed and tested in
    Xiaomi AIoT-IDE, but physical installation and phone interconnect require
    Xiaomi's supported signing and Mi Fitness development channel.

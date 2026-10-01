@@ -73,4 +73,16 @@ final class MiBandDataUploadProtocolTests: XCTestCase {
         XCTAssertEqual(Array(parts[2].prefix(4)), [3, 0, 3, 0])
         XCTAssertEqual(MiBandDataUploadProtocol.crc32(Data("123456789".utf8)), 0xCBF4_3926)
     }
+
+    func testParsesMissingBluetoothFrameRequestCapturedFromBand8() {
+        let packet = Data([0, 0, 1, 5, 2, 0, 3, 0, 4, 0, 5, 0])
+
+        XCTAssertEqual(
+            MiBandDataUploadProtocol.missingChunkIndexes(from: packet),
+            [2, 3, 4, 5]
+        )
+        XCTAssertNil(
+            MiBandDataUploadProtocol.missingChunkIndexes(from: Data([0, 0, 1, 1]))
+        )
+    }
 }

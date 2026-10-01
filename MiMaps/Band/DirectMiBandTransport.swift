@@ -110,10 +110,10 @@ final class DirectMiBandTransport: BandTransport {
         let distanceMeters = Int(instruction.distanceToManeuverMeters.rounded())
         let isNewStep = lastLiveStepIdentifier != instruction.stepIdentifier
         let distanceChangedEnough = lastLiveDistanceMeters.map {
-            abs($0 - distanceMeters) >= 5
+            abs($0 - distanceMeters) >= 2
         } ?? true
         let intervalElapsed = lastLiveUpdateTimestamp.map {
-            instruction.timestamp.timeIntervalSince($0) >= 5
+            instruction.timestamp.timeIntervalSince($0) >= 2
         } ?? true
         guard isNewStep || (intervalElapsed && distanceChangedEnough) else { return }
 

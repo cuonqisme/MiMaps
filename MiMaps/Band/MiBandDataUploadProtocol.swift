@@ -99,6 +99,23 @@ enum MiBandDataUploadProtocol {
         }
     }
 
+    /// Xiaomi's chunk channel asks the sender to retransmit missing BLE frames
+    /// with `00 00 01 05`, followed by little-endian, one-based frame indexes.
+    /// Returning nil distinguishes this packet from the ordinary start/end ACKs.
+    static func missingChunkIndexes(from data: Data) -> [Int]? {
+        let bytes = [UInt8](data)
+        guard bytes.count >= 4,
+              bytes[0] == 0,
+              bytes[1] == 0,
+              bytes[2] == 1,
+              bytes[3] == 5,
+              (bytes.count - 4).isMultiple(of: 2) else { return nil }
+
+        return stride(from: 4, to: bytes.count, by: 2).map { offset in
+            Int(UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8))
+        }
+    }
+
     static func md5(_ bytes: Data) -> Data {
         Data(Insecure.MD5.hash(data: bytes))
     }

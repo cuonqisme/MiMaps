@@ -143,12 +143,12 @@ final class BandTransportTests: XCTestCase {
         try await transport.updateLive(instruction(
             step: "live",
             distance: 98,
-            timestamp: Date(timeIntervalSince1970: 1_003)
+            timestamp: Date(timeIntervalSince1970: 1_001)
         ))
         try await transport.updateLive(instruction(
             step: "live",
             distance: 90,
-            timestamp: Date(timeIntervalSince1970: 1_006)
+            timestamp: Date(timeIntervalSince1970: 1_002)
         ))
 
         XCTAssertEqual(sender.messages.count, 2)
